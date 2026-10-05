@@ -29,6 +29,8 @@ Read from `.buildspace/artifacts/{feature-name}/`:
 - `clarify.md` — requirements to assess against
 - `plan.md` — planned approach and test cases
 - `execution-log.md` — files created/modified
+- `verify-report.md` (from `/figma-verify`) or `comparison-report.md` (from `/compare`) — design fidelity, if it exists
+- Project `CLAUDE.md` — project conventions. Where a project convention conflicts with a standards skill (e.g. Tailwind utilities instead of per-section stylesheets, project breakpoints, file naming), the project convention wins
 
 ---
 
@@ -107,10 +109,14 @@ Review these files: [list from execution-log]
 File types present: [e.g. "section .liquid, .css" — load only these checklists]
 
 Execution log: .buildspace/artifacts/{feature-name}/execution-log.md
+Project conventions: CLAUDE.md (if it exists)
 
 For each file, validate against the relevant skill checklist.
 Check standards compliance, readability, maintainability.
 Report issues with severity: Critical / Should Fix / Nice to Have.
+Where CLAUDE.md sets a different convention than a skill (styling approach,
+breakpoints, file or setting-ID naming), follow CLAUDE.md and do not report
+the difference as a violation. List such conflicts once under Observations.
 
 Cross-file concerns that are yours alone:
 - Schema setting ID collisions across sections
@@ -122,7 +128,11 @@ Do NOT check template registration or asset existence — verify-integration.mjs
 
 ---
 
-### Step 3 — First-Principles Questions
+### Step 3 — Design Fidelity (read, don't re-check)
+
+If `verify-report.md` or `comparison-report.md` exists, copy its final result and every **Unfixed mismatch** into the report. Don't capture screenshots or judge visuals here — that is `/figma-verify`'s and `/compare`'s job. If the feature was built from Figma and neither report exists, note it as a gap.
+
+### Step 4 — First-Principles Questions
 
 Think about the built feature from first principles. Ask yourself context-appropriate questions like:
 
@@ -193,6 +203,8 @@ Pipeline complete. Feature is ready for deployment.
 If verdict is **NEEDS WORK**:
 ```
 → Run /fix to resolve issues. The assessment report includes root cause analysis for each issue.
+  If the feature was verified with /figma-verify and the fix changes markup or classes,
+  re-run /figma-verify check-only afterwards.
 ```
 
 ---

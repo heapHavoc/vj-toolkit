@@ -42,6 +42,11 @@
 - **Snippet wiring:** {all correct / issues}
 - **Asset files:** {all exist / missing}
 
+## Design Fidelity
+- **Source:** verify-report.md (/figma-verify) / comparison-report.md (/compare) / none
+- **Result:** {e.g. R1 3/8 → R3 8/8, sweep clean, behaviour 4/4}
+- **Unfixed mismatches:** {1–2 lines each, copied from the report, or "None"}
+
 ## First-Principles Findings
 - {Any concerns from first-principles thinking}
 
