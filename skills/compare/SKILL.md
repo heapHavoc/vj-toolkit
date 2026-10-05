@@ -3,7 +3,7 @@ name: compare
 description: >
   Visual comparison of developed page against Figma design. Captures
   section-level screenshots via Playwright, then compares each section
-  against the Figma screenshots. Auto-triggers /fix on mismatch.
+  against the Figma screenshots. Hands mismatches off to /fix.
   Use after /execute when building from a Figma design.
 disable-model-invocation: true
 model: claude-opus-5
@@ -13,7 +13,7 @@ allowed-tools: Read, Write, Bash, Glob, Grep, Agent, AskUserQuestion, Skill
 
 # Compare — Visual Design Comparison
 
-You are entering the Compare phase. Your job is to capture screenshots of the developed page section-by-section and compare them against the original Figma screenshots. If mismatches are found, trigger /fix and re-compare. Maximum 2 comparison-fix iterations.
+You are entering the Compare phase. Your job is to capture screenshots of the developed page section-by-section and compare them against the original Figma screenshots. If mismatches are found, hand them off to /fix and re-compare after it runs. Maximum 2 comparison-fix iterations.
 
 ---
 
@@ -156,26 +156,28 @@ Report saved to .buildspace/artifacts/{feature-name}/comparison-report.md
   Pipeline: /assess
 ```
 
-### Any MISMATCH found
+### Any MISMATCH found → Hand off to /fix
+
+`/fix` needs the user's approval of its diagnosis and can't be invoked from this skill (it is user-invoked only, and this phase runs in a forked context). So hand off instead of triggering it:
 
 If this is **iteration 1**:
-
 1. Tell the user what mismatches were found — a brief summary, not the full report
-2. Invoke `/fix` through the Skill tool with the mismatches as context:
+2. Tell them:
    ```
-   Visual comparison found mismatches. Fix the following issues from comparison-report.md:
-   {list each MISMATCH issue with section name and description}
-   Feature: {feature-name}
+   → Run /fix with the comparison report, then re-run /compare (iteration 2).
+     /fix Visual comparison found mismatches in .buildspace/artifacts/{feature-name}/comparison-report.md
    ```
-3. After `/fix` completes, re-run Step 3 and Step 4 (iteration 2). The capture script re-compares automatically, so only genuinely still-broken sections come back for review.
+   On the re-run, the capture script re-compares automatically, so only genuinely still-broken sections come back for review.
 
-If this is **iteration 2**:
-- Report what still doesn't match and stop. Do NOT trigger a third fix cycle.
+If this is **iteration 2** (the report from iteration 1 exists and /fix has run since):
+- Report what still doesn't match and stop. Do NOT suggest a third fix cycle.
 - Suggest the user review manually, then:
   ```
   → Run /assess for verification (even with remaining visual issues).
     Pipeline: /assess
   ```
+
+For a measured, automatic fix loop on features extracted with `/figma-rest`, use `/figma-verify` instead.
 
 ---
 
@@ -187,5 +189,5 @@ If this is **iteration 2**:
 - Trust the manifest. Read images only for sections it flagged — opening a `PASS` section is wasted work.
 - Never guess a verdict from code alone. For a flagged section, read the screenshots.
 - Do NOT install or uninstall Playwright. The capture script owns that.
-- Do NOT fix issues yourself. Invoke /fix through the Skill tool and let it handle repairs.
+- Do NOT fix issues yourself. Hand them off to /fix (user-invoked) and re-compare afterwards.
 - Present the comparison report path to the user, not the full report content.
