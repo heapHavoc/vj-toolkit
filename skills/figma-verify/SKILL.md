@@ -43,9 +43,12 @@ Scripts: `${CLAUDE_SKILL_DIR}/scripts/`. They use the project's own Playwright (
 
 ## Step 2: Dev Server & Route
 
+Use the URL from `$ARGUMENTS` if given, otherwise `.buildspace/artifacts/{feature}/preview-url.txt` (shared with `/compare`) if it exists and responds. Otherwise detect it:
+
 ```bash
 node ${CLAUDE_SKILL_DIR}/scripts/detect-server.js
 ```
+Write the URL you use to `preview-url.txt`, so `/compare` and later runs reuse it. Never store a password on disk.
 - If no server is found, ask the user to start it (`npm run shopify` / `shopify theme dev`) and give them the `!` command. Don't start it yourself.
 - Route: take it from `plan.md`/`clarify.md` (template + a handle with real data, e.g. `/products/<handle>`). Ask if it's unclear. For a template-specific route, add `?view=` if the plan uses an alternate template.
 - If the storefront is password-protected, use `--password` (ask once).
