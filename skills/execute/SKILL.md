@@ -26,8 +26,10 @@ Read `.buildspace/artifacts/{feature-name}/plan.md` as your primary input.
 
 Also read if they exist in the same folder:
 - `design-context.md` — for design specifications (typography, colors, spacing, layout)
-- `sections.json` — canonical section names from `/figma` (used to align selectors.json naming for `/compare`)
+- `sections.json` — canonical section names, screenshots, dumps and behaviour from `/figma-rest` or `/figma` (used to align selectors.json naming for `/figma-verify` and `/compare`)
+- `figma-dumps/{viewport}/NN-{name}.md` + `.json` spec — exact values for the section being built (from `/figma-rest`)
 - `assets-manifest.json` — image assets downloaded from Figma (used to reference real images instead of placeholders)
+- Project `CLAUDE.md` — project conventions and build commands
 
 ---
 
@@ -72,10 +74,13 @@ For each TODO in order:
 3. **Build the file** following:
    - **The File Spec** for WHAT to build (settings, classes, tokens, structure)
    - **The loaded skill rules** for HOW to write it (syntax, patterns, conventions)
+   - **The section's Figma dump/spec and screenshot** (if the File Spec names one) for exact values — open them before writing the file. The File Spec's design-values table wins; the dump fills anything the table doesn't cover
    - The File Spec contains all decisions — do not improvise or add features not specified
 4. **Validate against checklist** — after building each file, check every item in the relevant skill checklist. Fix violations before moving on.
 5. **Mark task as completed** — `TaskUpdate({ taskId: "...", status: "completed" })`
-6. **Record what you built** — keep a running list of files created/modified, wrapper selectors, and any deviations from the plan.
+6. **Record what you built** — keep a running list of files created/modified, wrapper selectors, and any deviations from the plan or from Figma (with the reason).
+
+**Figma contradictions:** if the desktop and mobile frames disagree (e.g. different copy or a different number of items for the same element) and the plan's Deviations from Figma doesn't resolve it, don't silently pick one. Build the plan's choice, and record it as a deviation flagged for the user.
 
 **You build in the main context.** This means:
 - You can see every file you've already created
@@ -90,9 +95,13 @@ If `assets-manifest.json` exists, use it when building **template `.json` files*
 ```
 If `shopifyRef` is not present for an asset, fall back to the local file path from `figmaAssets/`.
 
+**Content in template JSONs:** use the Figma copy from the section dumps (`»` text) for headings, labels and CTAs, unless the plan says otherwise. Dynamic store data (product titles, prices) comes from Shopify, not Figma.
+
 ### Step 5: Post-Build Validation
 
 After all TODOs are complete:
+
+0. **Rebuild CSS** if the project compiles CSS (e.g. Tailwind) and you added new utility classes — use the build command from CLAUDE.md / `package.json` (e.g. `npm run build`). Without it the new classes don't exist in the browser.
 
 1. **Run `shopify theme check`** if available:
    ```bash
@@ -121,19 +130,21 @@ Read the template from `${CLAUDE_SKILL_DIR}/templates/execution-log-template.md`
 
 ### Step 7: Write selectors.json
 
-Collect all wrapper selectors for section `.liquid` files you built. The wrapper selector is the CSS class on the outermost `<div>` or `<section>` element that wraps the entire section's content.
+Collect all wrapper selectors for section `.liquid` files you built. Use the name and wrapper selector the plan decided for each section. Otherwise, the wrapper selector is the `data-*` attribute or CSS class on the outermost `<div>` or `<section>` element that wraps the entire section's content.
+
+Add `hooks` for interactive elements (the `data-*` attributes JS uses), so `/figma-verify` can test behaviour:
 
 Write a JSON array to `.buildspace/artifacts/{feature-name}/selectors.json`:
 
 ```json
 [
   { "name": "banner", "selector": ".loyalty-banner" },
-  { "name": "tiers", "selector": ".loyalty-tiers" }
+  { "name": "tiers", "selector": ".loyalty-tiers", "hooks": { "tab": "[data-tier-tab]", "panel": "[data-tier-panel]" } }
 ]
 ```
 
-**Critical — name alignment for `/compare`:**
-- If `sections.json` exists (from `/figma`), the `name` field in selectors.json **MUST match** the `name` field in sections.json for each corresponding section. This is how `/compare` pairs Figma screenshots (`figma-{name}-desktop.png`) with code screenshots (`code-{name}-desktop.png`).
+**Critical — name alignment for `/figma-verify` and `/compare`:**
+- If `sections.json` exists (from `/figma-rest` or `/figma`), the `name` field in selectors.json **MUST match** the `name` field in sections.json for each corresponding section. This is how `/figma-verify` and `/compare` pair Figma screenshots and specs with the built section.
 - If `sections.json` does not exist, derive `name` from the section filename (kebab-case, without path or extension).
 
 If no section files were built (e.g., only CSS/JS modifications), skip this step.
@@ -144,15 +155,21 @@ Tell the user:
 - Where the execution log was saved
 - Count of files created/modified
 - Whether theme check and schema validation passed
-- Any deviations from the plan and why
+- Any deviations from the plan or from Figma and why (flag Figma contradictions)
 - If `selectors.json` was written, mention it
 
 **Do NOT output file contents in conversation. The code files and execution log are the source of truth.**
 
 ### Next Step
-Check if Figma screenshots exist (`.buildspace/artifacts/{feature}/screenshots/figma-*.png`).
+Check `sections.json` and the Figma screenshots (`.buildspace/artifacts/{feature}/screenshots/figma-*`).
 
-If **Figma screenshots exist**, tell the user:
+If **sections.json has `dumps`** (built with `/figma-rest`), tell the user:
+```
+→ Run /figma-verify to measure the build against Figma, test interactions, and fix mismatches.
+  Remaining: /figma-verify → /assess
+```
+
+If **only Figma screenshots exist** (built with `/figma`), tell the user:
 ```
 → Run /compare for visual comparison against the Figma design.
   Remaining: /compare → /assess
@@ -173,6 +190,7 @@ If **no Figma screenshots**, tell the user:
 - Follow the plan's TODO order — you have full visibility of everything you've already built
 - Load the relevant skill BEFORE building each file type — understand the rules first
 - If the plan is ambiguous about something, make the best decision and note it as a deviation
+- Design values come from the File Spec and the section's Figma dump — never estimate from a screenshot when the dump has the number
 - Never skip a TODO — every TODO gets built
 - Every file must pass its relevant checklist before you move on
 - Run `shopify theme check` ONCE at the end, not per file
