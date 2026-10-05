@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet" />
+<script src="/vendor/marked.js"></script>
+<style>
+  :root, [data-theme="dark"] {
+    --paper-bg: #0b0c0e;
+    --paper: #141519;
+    --paper-2: #191a1f;
+    --paper-border: rgba(255, 255, 255, 0.07);
+    --paper-border-strong: rgba(255, 255, 255, 0.14);
+    --ink: #e6e4de;
+    --ink-2: #a5a39c;
+    --ink-3: #6d6c66;
+    --ink-rule: #e6e4de;
+    --sage: #7fb894;
+    --sage-dim: rgba(127, 184, 148, 0.12);
+    --cream: #1d1c18;
+    --cream-border: rgba(255, 255, 255, 0.05);
+    --th-bg: #26272c;
+    --th-text: #e6e4de;
+    --paper-code-bg: rgba(255, 255, 255, 0.07);
+    --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --card-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+    --paper-shadow: 0 0 0 1px var(--paper-border), 0 24px 48px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+  [data-theme="light"] {
+    --paper-bg: #eceae5;
+    --paper: #fdfdfb;
+    --paper-2: #f6f5f1;
+    --paper-border: rgba(30, 30, 25, 0.1);
+    --paper-border-strong: rgba(30, 30, 25, 0.2);
+    --ink: #1d1f22;
+    --ink-2: #55575c;
+    --ink-3: #90918f;
+    --ink-rule: #1d1f22;
+    --sage: #3d6b52;
+    --sage-dim: rgba(61, 107, 82, 0.1);
+    --cream: #f5f0e4;
+    --cream-border: rgba(0, 0, 0, 0.04);
+    --th-bg: #212327;
+    --th-text: #f5f5f2;
+    --paper-code-bg: rgba(0, 0, 0, 0.055);
+    --card-shadow: 0 1px 2px rgba(30, 32, 40, 0.05);
+    --card-shadow-hover: 0 2px 6px rgba(30, 32, 40, 0.06), 0 14px 36px rgba(30, 32, 40, 0.11);
+    --paper-shadow: 0 1px 3px rgba(30, 32, 40, 0.08), 0 16px 48px rgba(30, 32, 40, 0.1);
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+    letter-spacing: -0.011em;
+    background: var(--paper-bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--paper-border-strong); border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  button { font: inherit; letter-spacing: inherit; color: inherit; }
+  svg.icon { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; display: block; }
+  .hidden { display: none !important; }
+  .serif { font-family: "Source Serif 4", Georgia, serif; }
+
+  /* ================= shared chrome ================= */
+  .masthead {
+    display: flex; align-items: center; gap: 16px; height: 56px; flex-shrink: 0;
+    padding: 0 48px; border-bottom: 1px solid var(--paper-border);
+  }
+  .wordmark { font-size: 13px; font-weight: 700; letter-spacing: -0.013em; white-space: nowrap; }
+  .wordmark span { color: var(--ink-3); font-weight: 500; }
+  .masthead-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  .search {
+    display: flex; align-items: center; gap: 8px; width: 220px;
+    background: transparent; border: 1px solid var(--paper-border);
+    border-radius: 999px; padding: 6px 14px; transition: border-color 0.15s;
+  }
+  .search:focus-within { border-color: var(--ink-3); }
+  .search svg { color: var(--ink-3); }
+  .search input { border: none; background: none; outline: none; color: var(--ink); font: inherit; width: 100%; padding: 0; }
+  .search input::placeholder { color: var(--ink-3); }
+  .search kbd {
+    font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--ink-3);
+    border: 1px solid var(--paper-border-strong); border-radius: 4px; padding: 0 5px;
+  }
+  .segmented { display: flex; border: 1px solid var(--paper-border); border-radius: 999px; padding: 2px; gap: 2px; }
+  .segmented button {
+    border: none; background: none; color: var(--ink-2); cursor: pointer;
+    font-size: 12px; font-weight: 500; padding: 5px 14px; border-radius: 999px;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .segmented button:hover { color: var(--ink); }
+  .segmented button.active { background: var(--ink); color: var(--paper); }
+  .icon-btn {
+    border: 1px solid var(--paper-border); background: none; color: var(--ink-2);
+    width: 30px; height: 30px; border-radius: 999px; cursor: pointer;
+    display: grid; place-items: center; transition: all 0.15s;
+  }
+  .icon-btn:hover { border-color: var(--paper-border-strong); color: var(--ink); }
+
+  /* ================= home ================= */
+  .home { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  .home-scroll { flex: 1; overflow-y: auto; }
+
+  .hero {
+    display: flex; align-items: flex-start; gap: 56px; flex-wrap: wrap;
+    padding: 56px 48px 0;
+  }
+  .hero-lead { flex: 1; min-width: 420px; }
+  .eyebrow {
+    font-size: 11.5px; font-weight: 700; color: var(--sage);
+    letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 18px;
+  }
+  .hero .display { max-width: 900px; }
+  .display {
+    font-size: 44px; font-weight: 800; letter-spacing: -0.034em; line-height: 1.05;
+    color: var(--ink); margin: 0 0 20px;
+  }
+  .standfirst {
+    font-family: "Source Serif 4", Georgia, serif;
+    font-size: 19px; line-height: 1.55; color: var(--ink-2); margin: 0 0 24px; max-width: 640px;
+  }
+  .meta-row {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px;
+    font-size: 12.5px; font-weight: 600; color: var(--ink-2);
+  }
+  .meta-row .sep { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-3); opacity: 0.6; }
+  .meta-row .is-complete { color: var(--sage); }
+  .hero-rule { padding: 40px 48px 0; }
+  .rule { border: none; border-top: 2px solid var(--ink-rule); margin: 0; }
+
+  /* hero side panel: progress + core documents */
+  .hero-panel {
+    width: 340px; flex-shrink: 0;
+    background: var(--paper); border: 1px solid var(--paper-border); border-radius: 10px;
+    box-shadow: var(--card-shadow); padding: 24px 26px 12px; margin-top: 6px;
+  }
+  .panel-label {
+    font-size: 10.5px; font-weight: 700; color: var(--ink-3);
+    letter-spacing: 0.13em; text-transform: uppercase;
+  }
+  .panel-stat { display: flex; align-items: baseline; gap: 12px; margin-top: 12px; }
+  .panel-pct {
+    font-size: 44px; font-weight: 800; letter-spacing: -0.03em; line-height: 1;
+    color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  .panel-count { font-family: "Source Serif 4", Georgia, serif; font-size: 14.5px; color: var(--ink-2); }
+  .panel-count b { color: var(--sage); font-weight: 600; }
+  .ticks { display: flex; gap: 3px; margin: 16px 0 4px; }
+  .tick {
+    flex: 1; height: 20px; border-radius: 2.5px;
+    background: var(--paper-border); transition: background 0.3s;
+  }
+  .tick.on { background: var(--sage); }
+  .ticks-note { font-size: 10.5px; font-weight: 600; color: var(--ink-3); letter-spacing: 0.04em; margin-bottom: 6px; }
+
+  .panel-divider { border: none; border-top: 1px solid var(--paper-border); margin: 16px -26px 16px; }
+  .shelf-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+    border: none; background: none; padding: 9px 0; cursor: pointer; text-align: left;
+    font-family: "Source Serif 4", Georgia, serif; font-size: 14.5px; color: var(--ink);
+    border-top: 1px solid var(--paper-border); transition: color 0.15s;
+  }
+  #shelf .shelf-item:first-of-type { border-top: none; }
+  .shelf-item svg { color: var(--ink-3); width: 12px; height: 12px; transition: transform 0.15s, color 0.15s; }
+  .shelf-item:hover { color: var(--sage); }
+  .shelf-item:hover svg { color: var(--sage); transform: translateX(2px); }
+
+  /* chapters board */
+  .board-wrap { overflow-x: auto; }
+  .board { display: flex; gap: 24px; align-items: flex-start; padding: 28px 48px 72px; min-width: min-content; }
+  .column { width: 296px; flex-shrink: 0; }
+  .col-header { padding: 10px 2px 16px; }
+  .col-kicker { display: flex; align-items: baseline; gap: 10px; }
+  .ch-num {
+    font-size: 13px; font-weight: 700; color: var(--sage);
+    font-variant-numeric: tabular-nums; letter-spacing: 0.04em;
+  }
+  .ch-title { font-size: 15px; font-weight: 700; letter-spacing: -0.016em; color: var(--ink); }
+  .col-sub {
+    display: flex; align-items: center; gap: 10px; margin-top: 8px;
+    font-size: 11px; font-weight: 600; color: var(--ink-3);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .col-sub .col-bar { width: 56px; height: 2px; background: var(--paper-border-strong); border-radius: 2px; overflow: hidden; }
+  .col-sub .col-bar i { display: block; height: 100%; background: var(--sage); }
+  .col-overview {
+    border: none; background: none; padding: 0; cursor: pointer;
+    font-size: 11px; font-weight: 600; color: var(--ink-3);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border-bottom: 1px solid transparent; transition: color 0.15s;
+  }
+  .col-overview:hover { color: var(--sage); }
+
+  .col-cards { display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    position: relative;
+    background: var(--paper); border: 1px solid var(--paper-border); border-radius: 8px;
+    padding: 16px 18px 15px; cursor: pointer; box-shadow: var(--card-shadow);
+    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.18s, border-color 0.18s;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow-hover); border-color: var(--paper-border-strong); }
+  .card-kicker {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 9px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--ink-3);
+  }
+  .card-kicker .k-num { color: var(--sage); font-variant-numeric: tabular-nums; letter-spacing: 0.06em; }
+  .card-kicker .k-status { margin-left: auto; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+  .card-kicker .k-status svg { width: 11px; height: 11px; }
+  .card-kicker .k-status.complete { color: var(--sage); }
+  .card-title {
+    font-family: "Source Serif 4", Georgia, serif;
+    font-size: 16.5px; font-weight: 600; line-height: 1.4; letter-spacing: -0.004em;
+    color: var(--ink); margin: 0;
+    transition: color 0.15s;
+  }
+  .card:hover .card-title { color: var(--sage); }
+  .card-foot {
+    display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 11px;
+    border-top: 1px solid var(--paper-border);
+    font-size: 11px; font-weight: 600; color: var(--ink-3);
+  }
+  .card-foot .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-3); opacity: 0.6; }
+  .card-arrow {
+    position: absolute; right: 14px; bottom: 13px; color: var(--sage);
+    opacity: 0; transform: translateX(-4px); transition: opacity 0.18s, transform 0.18s;
+  }
+  .card:hover .card-arrow { opacity: 1; transform: none; }
+  .empty-col {
+    font-family: "Source Serif 4", Georgia, serif; font-style: italic;
+    font-size: 13.5px; color: var(--ink-3); padding: 10px 2px;
+  }
+  .loading { padding: 64px; text-align: center; color: var(--ink-3); font-size: 12px; }
+
+  /* ================= reader page ================= */
+  .reader { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--paper-bg); }
+  .reader-bar {
+    display: flex; align-items: center; gap: 14px; flex-shrink: 0; height: 56px;
+    padding: 0 24px; border-bottom: 1px solid var(--paper-border);
+  }
+  .back-btn {
+    display: flex; align-items: center; gap: 8px; border: none; background: none;
+    color: var(--ink-2); cursor: pointer; font-size: 12.5px; font-weight: 600;
+    padding: 6px 12px 6px 8px; border-radius: 999px; transition: all 0.15s;
+  }
+  .back-btn:hover { color: var(--ink); background: var(--sage-dim); }
+  .reader-path {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10.5px; color: var(--ink-3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .reader-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+  .reader-scroll { flex: 1; overflow-y: auto; }
+  .sheet {
+    max-width: 800px; margin: 40px auto 80px; padding: 76px 88px 88px;
+    background: var(--paper); border-radius: 4px; box-shadow: var(--paper-shadow);
+  }
+  @media (max-width: 900px) { .sheet { margin: 0; padding: 48px 32px; border-radius: 0; } }
+  .sheet .display { font-size: 40px; letter-spacing: -0.032em; line-height: 1.08; margin-bottom: 22px; }
+  .sheet .eyebrow { margin-bottom: 20px; }
+  .sheet .rule { margin-top: 26px; }
+
+  .doc-props { margin: 0; border-bottom: 1px solid var(--paper-border); padding: 14px 0; }
+  .doc-props .prop-row { display: grid; grid-template-columns: 130px 1fr; gap: 24px; padding: 4px 0; }
+  .doc-props dt {
+    font-size: 10.5px; font-weight: 700; color: var(--ink-3);
+    letter-spacing: 0.1em; text-transform: uppercase; padding-top: 4px;
+  }
+  .doc-props dd {
+    margin: 0; font-family: "Source Serif 4", Georgia, serif;
+    font-size: 14.5px; line-height: 1.6; color: var(--ink-2);
+  }
+  .doc-props dd code, .doc-props dd a { font-size: 12px; }
+
+  /* -------- editorial markdown -------- */
+  .prose { counter-reset: section; padding-top: 8px; }
+  .prose > :first-child { margin-top: 24px; }
+  .prose {
+    font-family: "Source Serif 4", Georgia, serif;
+    font-size: 16px; line-height: 1.72; color: var(--ink); letter-spacing: 0;
+  }
+  .prose h1, .prose h2, .prose h3, .prose h4 { font-family: Inter, -apple-system, sans-serif; color: var(--ink); }
+  .prose h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.022em; line-height: 1.3; margin: 48px 0 14px; }
+  .prose h2 {
+    font-size: 21px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.3;
+    margin: 52px 0 14px; display: flex; align-items: baseline; gap: 12px;
+  }
+  .prose h2::before {
+    counter-increment: section;
+    content: counter(section, decimal-leading-zero);
+    font-size: 13px; font-weight: 700; color: var(--sage);
+    font-variant-numeric: tabular-nums; letter-spacing: 0.04em;
+  }
+  .prose h3 { font-size: 15.5px; font-weight: 650; letter-spacing: -0.012em; margin: 34px 0 10px; }
+  .prose p { margin: 14px 0; }
+  .prose a { color: var(--sage); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--sage) 40%, transparent); text-underline-offset: 3px; }
+  .prose strong { font-weight: 600; }
+  .prose ul, .prose ol { padding-left: 24px; margin: 14px 0; }
+  .prose li { margin: 7px 0; }
+  .prose li::marker { color: var(--ink-3); }
+  .prose code {
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px;
+    background: var(--paper-code-bg); padding: 2px 6px; border-radius: 4px; color: var(--ink);
+  }
+  .prose pre {
+    background: var(--paper-code-bg); border: 1px solid var(--paper-border);
+    padding: 16px 18px; border-radius: 6px; overflow-x: auto; line-height: 1.6; margin: 18px 0;
+  }
+  .prose pre code { background: none; padding: 0; font-size: 12.5px; }
+  .prose blockquote {
+    background: var(--cream); border: 1px solid var(--cream-border); border-radius: 8px;
+    margin: 20px 0; padding: 18px 22px; color: var(--ink);
+  }
+  .prose blockquote p { margin: 6px 0; }
+  .prose hr { border: none; border-top: 1px solid var(--paper-border); margin: 40px 0; }
+  .prose .table-wrap { overflow-x: auto; margin: 22px 0; border-radius: 6px; border: 1px solid var(--paper-border); }
+  .prose table { border-collapse: collapse; width: 100%; }
+  .prose th, .prose td { padding: 11px 14px; text-align: left; vertical-align: top; }
+  .prose th {
+    font-family: Inter, sans-serif; background: var(--th-bg); color: var(--th-text);
+    font-size: 11px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .prose td { font-size: 14px; line-height: 1.55; border-bottom: 1px solid var(--paper-border); }
+  .prose tr:last-child td { border-bottom: none; }
+  .prose td code { font-size: 11.5px; }
+  .prose img { max-width: 100%; border-radius: 6px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <g id="i-search"><circle cx="6.5" cy="6.5" r="4.5"/><path d="m13 13-3.2-3.2"/></g>
+    <g id="i-sun"><circle cx="7" cy="7" r="3"/><path d="M7 1v1.4M7 11.6V13M1 7h1.4M11.6 7H13M2.8 2.8l1 1M10.2 10.2l1 1M2.8 11.2l1-1M10.2 3.8l1-1"/></g>
+    <g id="i-moon"><path d="M12 8.7A5.5 5.5 0 0 1 5.3 2 5.5 5.5 0 1 0 12 8.7Z"/></g>
+    <g id="i-arrow-left"><path d="M13 7H1M6 2 1 7l5 5"/></g>
+    <g id="i-arrow-right"><path d="M1 7h12M8 2l5 5-5 5"/></g>
+    <g id="i-check"><path d="m2 7.5 3.5 3.5L12 3.5"/></g>
+  </defs>
+</svg>
+
+<div class="home" id="board-view">
+  <header class="masthead">
+    <span class="wordmark"><span id="wordmark-name">Docs</span> <span>/ Documentation</span></span>
+    <div class="masthead-actions">
+      <label class="search">
+        <svg class="icon" viewBox="0 0 14 14"><use href="#i-search"/></svg>
+        <input id="search" type="text" placeholder="Search" />
+        <kbd>/</kbd>
+      </label>
+      <div class="segmented" id="filters">
+        <button class="active" data-filter="all">All</button>
+        <button data-filter="complete">Delivered</button>
+        <button data-filter="not_started">Not started</button>
+      </div>
+      <button class="icon-btn theme-toggle" title="Toggle theme">
+        <svg class="icon theme-icon" viewBox="0 0 14 14"><use href="#i-sun"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="home-scroll">
+    <section class="hero">
+      <div class="hero-lead">
+        <div class="eyebrow">Internal Build Documentation</div>
+        <h1 class="display" id="hero-title">&nbsp;</h1>
+        <p class="standfirst" id="hero-standfirst"></p>
+        <div class="meta-row" id="hero-meta"></div>
+      </div>
+      <aside class="hero-panel">
+        <div id="progress-block">
+          <div class="panel-label">Progress</div>
+          <div class="panel-stat">
+            <span class="panel-pct" id="panel-pct">&nbsp;</span>
+            <span class="panel-count" id="panel-count"></span>
+          </div>
+          <div class="ticks" id="ticks"></div>
+          <div class="ticks-note">One square per specification</div>
+          <hr class="panel-divider" />
+        </div>
+        <div class="panel-label">Core documents</div>
+        <div id="shelf" style="margin-top:8px"></div>
+      </aside>
+    </section>
+
+    <div class="hero-rule"><hr class="rule" /></div>
+
+    <div class="board-wrap">
+      <div class="board" id="board"><div class="loading">Loading</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="reader hidden" id="reader-view">
+  <div class="reader-bar">
+    <button class="back-btn" id="back-btn">
+      <svg class="icon" viewBox="0 0 14 14"><use href="#i-arrow-left"/></svg>
+      Board
+    </button>
+    <span class="reader-path" id="reader-path"></span>
+    <div class="reader-actions">
+      <div class="segmented hidden" id="reader-tabs">
+        <button class="active" data-tab="spec">Specification</button>
+        <button data-tab="log">Status log</button>
+      </div>
+      <button class="icon-btn theme-toggle" title="Toggle theme">
+        <svg class="icon theme-icon" viewBox="0 0 14 14"><use href="#i-sun"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="reader-scroll" id="reader-scroll">
+    <article class="sheet">
+      <div class="eyebrow" id="doc-eyebrow"></div>
+      <h1 class="display" id="doc-title"></h1>
+      <div class="meta-row" id="doc-meta"></div>
+      <hr class="rule" />
+      <dl class="doc-props hidden" id="doc-props"></dl>
+      <div class="prose" id="doc-body"></div>
+    </article>
+  </div>
+</div>
+
+<script>
+  const icon = (id, cls = "icon") => `<svg class="${cls}" viewBox="0 0 14 14"><use href="#${id}"/></svg>`;
+  const fmtDate = (iso, style = "long") =>
+    new Date(iso + "T00:00:00").toLocaleDateString("en-US",
+      style === "long" ? { month: "long", day: "numeric", year: "numeric" } : { month: "short", day: "numeric" });
+  const pad2 = (n) => String(n).padStart(2, "0");
+
+  let state = null;
+  let stateJson = "";
+  let statePromise = null;
+  let filter = "all";
+  let query = "";
+  let currentDoc = null;
+  let currentTab = "spec";
+
+  marked.setOptions({ gfm: true });
+
+  // ---- theme (dark-first) ----
+  const applyTheme = (t) => {
+    document.documentElement.dataset.theme = t;
+    document.querySelectorAll(".theme-icon").forEach((el) => {
+      el.innerHTML = `<use href="#${t === "dark" ? "i-sun" : "i-moon"}"/>`;
+    });
+  };
+  applyTheme(localStorage.getItem("docs-viewer-theme") || "dark");
+  document.querySelectorAll(".theme-toggle").forEach((btn) => {
+    btn.onclick = () => {
+      const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      localStorage.setItem("docs-viewer-theme", next);
+      applyTheme(next);
+    };
+  });
+
+  // ---- data ----
+  async function loadState() {
+    const res = await fetch("/api/state");
+    const text = await res.text();
+    if (text === stateJson) return;
+    stateJson = text;
+    state = JSON.parse(text);
+    renderHero();
+    renderShelf();
+    renderBoard();
+  }
+  function ensureState() {
+    if (state) return Promise.resolve();
+    if (!statePromise) statePromise = loadState();
+    return statePromise;
+  }
+
+  function renderHero() {
+    const { complete, total } = state.stats;
+    const allPrds = state.phases.flatMap((p) => p.prds);
+    const dates = allPrds.map((p) => p.completedDate).filter(Boolean).sort();
+    const latest = dates[dates.length - 1];
+    const hasRoadmap = state.phases.length > 0;
+
+    document.title = state.projectName + " — Docs";
+    document.getElementById("wordmark-name").textContent = state.projectName;
+    const heroTitle = document.getElementById("hero-title");
+    heroTitle.innerHTML = "<span></span><br />" + (hasRoadmap ? "Build Roadmap" : "Documentation");
+    heroTitle.firstChild.textContent = state.projectName;
+    document.getElementById("hero-standfirst").textContent = hasRoadmap
+      ? "Every specification in this project's docs folder, phase by phase. Click any card to read it in full."
+      : "Everything in this project's docs folder, ready to read.";
+
+    const meta = document.getElementById("hero-meta");
+    meta.innerHTML = "";
+    const parts = [];
+    if (hasRoadmap) parts.push(`${state.phases.length} phases`, `${total} specifications`);
+    else parts.push(`${state.coreDocs.length} documents`);
+    if (latest) parts.push(`Updated ${fmtDate(latest)}`);
+    parts.forEach((m, i) => {
+      if (i > 0) meta.appendChild(Object.assign(document.createElement("span"), { className: "sep" }));
+      meta.appendChild(Object.assign(document.createElement("span"), { textContent: m }));
+    });
+
+    document.getElementById("panel-pct").textContent = (total ? Math.round((complete / total) * 100) : 0) + "%";
+    const count = document.getElementById("panel-count");
+    count.innerHTML = "<b></b> of " + total + "<br />delivered";
+    count.querySelector("b").textContent = complete;
+
+    const ticks = document.getElementById("ticks");
+    ticks.innerHTML = "";
+    for (const prd of allPrds) {
+      const tick = document.createElement("span");
+      tick.className = "tick" + (prd.status === "complete" ? " on" : "");
+      tick.title = `${prd.id} — ${prd.title}`;
+      ticks.appendChild(tick);
+    }
+    // projects without a roadmap get a documents-only panel
+    document.getElementById("progress-block").classList.toggle("hidden", !hasRoadmap);
+  }
+
+  function renderShelf() {
+    const shelf = document.getElementById("shelf");
+    shelf.innerHTML = "";
+    for (const doc of state.coreDocs) {
+      const btn = document.createElement("button");
+      btn.className = "shelf-item";
+      btn.innerHTML = "<span></span>" + icon("i-arrow-right");
+      btn.firstChild.textContent = doc.title;
+      btn.onclick = () => navigateToDoc(doc.path);
+      shelf.appendChild(btn);
+    }
+  }
+
+  function cardMatches(prd) {
+    if (filter !== "all" && prd.status !== filter) return false;
+    if (!query) return true;
+    return (prd.id + " " + prd.title).toLowerCase().includes(query);
+  }
+
+  function renderBoard() {
+    const board = document.getElementById("board");
+    board.innerHTML = "";
+    if (state.error === "no-docs") {
+      board.innerHTML = '<div class="empty-col">No docs folder found in this project.</div>';
+      return;
+    }
+    if (!state.phases.length) {
+      board.innerHTML = '<div class="empty-col">No roadmap phases found — core documents are listed above.</div>';
+      return;
+    }
+    for (const phase of state.phases) {
+      const done = phase.prds.filter((p) => p.status === "complete").length;
+      const col = document.createElement("div");
+      col.className = "column";
+
+      const head = document.createElement("div");
+      head.className = "col-header";
+      head.innerHTML = `
+        <div class="col-kicker">
+          <span class="ch-num">${pad2(phase.num)}</span>
+          <span class="ch-title"></span>
+        </div>
+        <div class="col-sub">
+          <span>${done} of ${phase.prds.length} delivered</span>
+          <span class="col-bar"><i style="width:${phase.prds.length ? (done / phase.prds.length) * 100 : 0}%"></i></span>
+          ${phase.overviewPath ? '<button class="col-overview">Overview</button>' : ""}
+        </div>`;
+      head.querySelector(".ch-title").textContent = phase.title;
+      const ovBtn = head.querySelector(".col-overview");
+      if (ovBtn) ovBtn.onclick = () => navigateToDoc(phase.overviewPath);
+      col.appendChild(head);
+
+      const cards = document.createElement("div");
+      cards.className = "col-cards";
+      let visible = 0;
+      for (const prd of phase.prds) {
+        if (!cardMatches(prd)) continue;
+        visible++;
+        const done = prd.status === "complete";
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="card-kicker">
+            <span class="k-num">${prd.id}</span>
+            <span class="k-status ${done ? "complete" : ""}">${done ? icon("i-check") + "Delivered" : "Not started"}</span>
+          </div>
+          <h3 class="card-title"></h3>
+          <div class="card-foot"></div>
+          <span class="card-arrow">${icon("i-arrow-right")}</span>`;
+        card.querySelector(".card-title").textContent = prd.title;
+        const foot = card.querySelector(".card-foot");
+        const footParts = [];
+        if (prd.priority) footParts.push(prd.priority);
+        if (prd.scope) footParts.push(prd.scope);
+        if (prd.completedDate) footParts.push(fmtDate(prd.completedDate, "short"));
+        footParts.forEach((text, i) => {
+          if (i > 0) foot.appendChild(Object.assign(document.createElement("span"), { className: "sep" }));
+          foot.appendChild(Object.assign(document.createElement("span"), { textContent: text }));
+        });
+        card.onclick = () => navigateToDoc(prd.path);
+        cards.appendChild(card);
+      }
+      if (!visible) {
+        const empty = document.createElement("div");
+        empty.className = "empty-col";
+        empty.textContent = "Nothing matches here";
+        cards.appendChild(empty);
+      }
+      col.appendChild(cards);
+      board.appendChild(col);
+    }
+  }
+
+  // ---- filters / search ----
+  document.getElementById("filters").addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    filter = btn.dataset.filter;
+    document.querySelectorAll("#filters button").forEach((b) => b.classList.toggle("active", b === btn));
+    renderBoard();
+  });
+  const searchInput = document.getElementById("search");
+  searchInput.addEventListener("input", (e) => {
+    query = e.target.value.trim().toLowerCase();
+    renderBoard();
+  });
+
+  // ---- doc metadata resolution ----
+  function findDocInfo(relPath) {
+    for (const phase of state.phases) {
+      if (phase.overviewPath === relPath) {
+        return {
+          eyebrow: `Phase ${phase.num} · Overview`,
+          title: phase.title,
+          meta: [`${phase.prds.filter((p) => p.status === "complete").length} of ${phase.prds.length} delivered`],
+          hasLog: false,
+        };
+      }
+      for (const prd of phase.prds) {
+        if (prd.path === relPath) {
+          const meta = [];
+          if (prd.priority) meta.push(prd.priority);
+          if (prd.scope) meta.push(prd.scope);
+          meta.push(
+            prd.status === "complete"
+              ? { text: "Completed " + fmtDate(prd.completedDate), cls: "is-complete" }
+              : { text: "Not started" },
+          );
+          return {
+            eyebrow: `Phase ${phase.num} · ${phase.title}`,
+            title: `${prd.id} — ${prd.title}`,
+            meta,
+            hasLog: prd.hasLogEntry,
+          };
+        }
+      }
+    }
+    const core = state.coreDocs.find((d) => d.path === relPath);
+    return { eyebrow: "Core document", title: core ? core.title : relPath, meta: [], hasLog: false };
+  }
+
+  // ---- markdown transforms ----
+  function stripLeadingHeading(target) {
+    const first = target.firstElementChild;
+    if (first && (first.tagName === "H1" || first.tagName === "H2")) first.remove();
+  }
+
+  const SHOWN_KEYS = new Set(["phase", "priority", "estimated scope"]);
+  function extractProps(target) {
+    const propsBox = document.getElementById("doc-props");
+    propsBox.innerHTML = "";
+    propsBox.classList.add("hidden");
+    const first = target.firstElementChild;
+    if (!first || first.tagName !== "P") return;
+    const isKey = (n) => n.nodeType === 1 && n.tagName === "STRONG" && /:\s*$/.test(n.textContent);
+    const rows = [];
+    let current = null;
+    for (const node of [...first.childNodes]) {
+      if (isKey(node)) {
+        current = { key: node.textContent.replace(/:\s*$/, ""), nodes: [] };
+        rows.push(current);
+      } else if (current) {
+        current.nodes.push(node);
+      }
+    }
+    if (rows.length < 1 || (rows.length === 1 && !rows[0].nodes.length)) return;
+    first.remove();
+    const keep = rows.filter((r) => !SHOWN_KEYS.has(r.key.toLowerCase()));
+    if (!keep.length) return;
+    for (const row of keep) {
+      const wrap = document.createElement("div");
+      wrap.className = "prop-row";
+      const dt = document.createElement("dt");
+      dt.textContent = row.key;
+      const dd = document.createElement("dd");
+      row.nodes.forEach((n) => dd.appendChild(n));
+      dd.normalize();
+      if (dd.firstChild?.nodeType === 3) dd.firstChild.textContent = dd.firstChild.textContent.replace(/^\s+/, "");
+      wrap.append(dt, dd);
+      propsBox.appendChild(wrap);
+    }
+    propsBox.classList.remove("hidden");
+  }
+
+  function renderProse(md) {
+    const target = document.getElementById("doc-body");
+    target.innerHTML = marked.parse(md);
+    stripLeadingHeading(target);
+    extractProps(target);
+    target.querySelectorAll("table").forEach((t) => {
+      const wrap = document.createElement("div");
+      wrap.className = "table-wrap";
+      t.replaceWith(wrap);
+      wrap.appendChild(t);
+    });
+    document.getElementById("reader-scroll").scrollTop = 0;
+  }
+
+  // ---- reader page ----
+  const boardView = document.getElementById("board-view");
+  const readerView = document.getElementById("reader-view");
+  const readerTabs = document.getElementById("reader-tabs");
+
+  function setTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll("#reader-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+    renderProse(tab === "log" ? currentDoc.logEntry : currentDoc.content);
+  }
+  readerTabs.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (btn) setTab(btn.dataset.tab);
+  });
+
+  async function showDoc(relPath) {
+    await ensureState();
+    const info = findDocInfo(relPath);
+    document.getElementById("doc-eyebrow").textContent = info.eyebrow;
+    document.getElementById("doc-title").textContent = info.title;
+    document.getElementById("reader-path").textContent = "docs/" + relPath;
+    const metaBox = document.getElementById("doc-meta");
+    metaBox.innerHTML = "";
+    info.meta.forEach((m, i) => {
+      if (i > 0) metaBox.appendChild(Object.assign(document.createElement("span"), { className: "sep" }));
+      const span = document.createElement("span");
+      span.textContent = typeof m === "string" ? m : m.text;
+      if (typeof m === "object" && m.cls) span.className = m.cls;
+      metaBox.appendChild(span);
+    });
+    document.getElementById("doc-body").innerHTML = '<div class="loading">Loading</div>';
+    document.getElementById("doc-props").classList.add("hidden");
+    readerTabs.classList.add("hidden");
+    boardView.classList.add("hidden");
+    readerView.classList.remove("hidden");
+
+    const res = await fetch("/api/doc?path=" + encodeURIComponent(relPath));
+    currentDoc = await res.json();
+    if (currentDoc.error) {
+      document.getElementById("doc-body").textContent = "Could not load: " + currentDoc.error;
+      return;
+    }
+    const hasLog = info.hasLog && Boolean(currentDoc.logEntry);
+    readerTabs.classList.toggle("hidden", !hasLog);
+    currentTab = "spec";
+    document.querySelectorAll("#reader-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === "spec"));
+    renderProse(currentDoc.content);
+  }
+
+  function showBoard() {
+    readerView.classList.add("hidden");
+    boardView.classList.remove("hidden");
+  }
+
+  // ---- hash routing ----
+  function navigateToDoc(relPath) {
+    location.hash = "#/doc/" + relPath;
+  }
+  document.getElementById("back-btn").onclick = () => { location.hash = "#/"; };
+
+  function route() {
+    const hash = decodeURIComponent(location.hash);
+    if (hash.startsWith("#/doc/")) showDoc(hash.slice("#/doc/".length));
+    else showBoard();
+  }
+  window.addEventListener("hashchange", route);
+
+  // ---- keyboard ----
+  document.addEventListener("keydown", (e) => {
+    const readerOpen = !readerView.classList.contains("hidden");
+    if (e.key === "Escape" && readerOpen) location.hash = "#/";
+    if (e.key === "/" && !readerOpen && document.activeElement !== searchInput) {
+      e.preventDefault();
+      searchInput.focus();
+    }
+  });
+
+  // ---- boot + live sync ----
+  ensureState().then(route);
+  setInterval(() => loadState().catch(() => {}), 5000);
+</script>
+</body>
+</html>

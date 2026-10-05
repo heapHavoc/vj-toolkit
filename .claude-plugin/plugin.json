@@ -1,0 +1,11 @@
+{
+  "name": "shopify-theme-toolkit",
+  "description": "Orchestrated Shopify theme development workflow with skills, agents, and standards. Supports feature development, bug fixing, assessment, and code understanding through /clarify → /plan → /execute → /assess → /fix pipeline. Optional plan interrogation via /grill-me, two-way ClickUp integration via /clickup (task intake + comment/status/time updates) and design intake via /figma.",
+  "version": "3.5.0",
+  "author": {
+    "name": "Aditya Pasikanti"
+  },
+  "repository": "https://github.com/shopify-claude-devx/shopify-standards-marketplace",
+  "license": "MIT",
+  "keywords": ["shopify", "theme", "liquid", "development", "workflow"]
+}
