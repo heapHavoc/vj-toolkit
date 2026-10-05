@@ -156,6 +156,10 @@ Tell the user what was fixed and suggest next step:
 ```
 → Run /assess to verify the fix and check for any new issues.
 ```
+If the feature has a `verify-report.md` and the fix changed markup or classes, also suggest:
+```
+→ Run /figma-verify check-only to confirm the design still matches.
+```
 
 ---
 
