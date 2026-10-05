@@ -30,6 +30,11 @@ Read from `.buildspace/artifacts/{feature-name}/`:
 - `clarify.md` — the requirements (REQUIRED)
 - `design-tokens.json` — available design tokens (if exists)
 - `design-context.md` — design specs: typography, colors, spacing, layout (if exists)
+- `sections.json` — canonical section names, Figma screenshots, dumps and behaviour per section (if exists; from `/figma-rest` or `/figma`)
+- `figma-dumps/{viewport}/NN-{name}.md` + `.json` spec — exact per-section values: fonts, sizes, colours, spacing, positions, interactions (if exists; from `/figma-rest`)
+- `figma-dumps/{viewport}-tokens.md` + `{viewport}-index.json` — Figma variables/styles and the frame width per viewport (if exists)
+- `assets-manifest.json` — image assets per section (if exists)
+- Project `CLAUDE.md` — project conventions (styling approach, breakpoints, naming). Where it conflicts with a standards skill, the project file wins for that project
 
 ---
 
@@ -37,6 +42,8 @@ Read from `.buildspace/artifacts/{feature-name}/`:
 
 ### Step 1: Read All Inputs
 Read the requirements and all available artifacts. Understand the full picture before analyzing the codebase.
+
+If `sections.json` has `dumps`, open each section's dump(s) and screenshots — not only `design-context.md`. The dumps are the source of truth for design values.
 
 ### Step 2: Analyze the Codebase
 Use `Glob` and `Grep` for quick context:
@@ -50,6 +57,7 @@ Then dispatch the **codebase-analyzer** agent:
 >
 > Read `.buildspace/artifacts/{feature-name}/clarify.md` for requirements.
 > If `.buildspace/artifacts/{feature-name}/design-context.md` exists, read it for design context.
+> If `sections.json` exists, map each Figma section to existing sections/snippets that already render something similar.
 >
 > Focus on:
 > - Naming conventions (file names, setting IDs, CSS class prefixes)
@@ -76,13 +84,18 @@ Using the requirements + codebase analysis, make every decision:
 
 1. **File path** — following codebase naming conventions discovered by agent
 2. **Schema settings** — exact IDs, types, labels, groups (following section-standards skill rules, with ID prefixes from codebase conventions)
-3. **CSS classes** — exact BEM class names (following css-standards skill rules, with naming prefix from codebase conventions)
+3. **CSS classes** — exact class names or utilities (following css-standards skill rules and the project's styling convention from CLAUDE.md, e.g. Tailwind utilities instead of a per-section stylesheet)
 4. **Block types** — if section has repeatable content, exact block type names and their settings
 5. **Null checks** — which settings need blank/empty guards
-6. **Design values** — exact colors, font sizes, spacing, and layout from design-context.md
+6. **Design values** — exact colors, font sizes, spacing, and layout **per Figma frame width** (e.g. 402 / 1440 from `{viewport}-index.json`), taken from the section dumps/specs (fallback: design-context.md). Map every value to an existing token (theme setting, CSS variable, Tailwind config). Values with no token go to the approval question: add a token, or use an arbitrary value
 7. **CSS loading strategy** — preload (above fold) or lazy load (below fold)
 8. **JS approach** — none, DOMContentLoaded, or Web Component (and why)
 9. **Existing code to reuse** — snippets, patterns, utilities found by agent
+10. **Interactions** — from the dump's prototype data (`⚡`), the section's `behaviour` and Behaviour signals, and clarify.md decisions (carousel, sticky, hover/selected states, accordion). Each becomes a test case; `/figma-verify` turns them into browser tests
+11. **Section name + wrapper selector** — the `sections.json` name and the stable wrapper selector (`data-*` attribute or section class) for every section. `/execute` writes these into `selectors.json` unchanged
+12. **Content** — template JSON copy and images per section, from the Figma text and `assets-manifest.json`
+
+**Deviations from Figma.** List every place where the build will intentionally differ from Figma, with the reason: a clarify decision, out of scope, a later QA decision, or a Figma contradiction (e.g. desktop and mobile frames show different copy for the same element). Ask the user to resolve contradictions instead of silently picking one. `/figma-verify` treats this list as decided and does not "fix" it.
 
 **When the plan references an existing codebase pattern:** Include a brief note like "Follow wrapper pattern from testimonials.liquid — uses `data-section-id` attribute." This is pointing to a reference, not writing code.
 
@@ -107,7 +120,7 @@ Use `AskUserQuestion` to confirm:
 Once the user confirms the plan, tell them:
 ```
 → Run /execute to implement the plan.
-  Remaining: /execute → /compare (if built from Figma) → /assess
+  Remaining: /execute → /figma-verify (if built with /figma-rest) or /compare (if built with /figma) → /assess
 ```
 
 **Context tip:** If your conversation is getting long, you can `/clear` before running `/execute` — it reads from artifacts, not conversation history.
@@ -116,7 +129,8 @@ Once the user confirms the plan, tell them:
 
 ## Rules
 - Zero creative decisions for /execute — if /execute has to decide, the plan failed
-- Reference design-context.md for exact design values — never guess colors, sizes, or spacing when the design context specifies them
+- Reference the section dumps/specs (or design-context.md) for exact design values — never guess colors, sizes, or spacing when the design specifies them
+- Every intentional difference from Figma is listed under Deviations from Figma — an unlisted difference is a defect
 - Standards skills are the AUTHORITY for how code should be written — always follow them
 - Codebase analyzer informs naming conventions (file names, setting ID prefixes, CSS class prefixes) and identifies reusable code — but never overrides standards for code patterns, structure, or architecture
 - If the existing codebase violates standards, the new code STILL follows standards — do not replicate bad patterns
