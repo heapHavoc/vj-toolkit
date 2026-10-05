@@ -1,0 +1,55 @@
+{
+  "store": "www.client-store.com",
+  "storefrontPassword": null,
+  "themes": {
+    "live": { "themeId": null },
+    "preview": { "themeId": null, "params": { "pb": "0" } }
+  },
+  "branches": { "live": "main", "staging": "stage" },
+  "pages": [
+    { "name": "home", "path": "/", "template": "index", "always": true, "key": true },
+    { "name": "collection", "path": "/collections/all", "template": "collection" },
+    { "name": "product", "path": "/products/handle", "template": "product", "liveTemplate": "product", "key": true },
+    { "name": "search", "path": "/search?q=shirt", "template": "search" },
+    { "name": "cart", "path": "/cart", "template": "cart" }
+  ],
+  "fixtures": {
+    "productInStock": "handle",
+    "productSoldOut": "handle",
+    "productMultiVariant": "handle",
+    "collection": "handle",
+    "collectionEmpty": "handle",
+    "searchHit": "shirt",
+    "searchMiss": "zzzzqqq"
+  },
+  "analytics": {
+    "expectGA4": true,
+    "expectGTM": true,
+    "expectMetaPixel": true,
+    "expectedEvents": ["view_item", "add_to_cart", "begin_checkout"],
+    "journeys": [
+      { "name": "default", "collection": "all", "product": "handle" }
+    ],
+    "selectors": {
+      "addToCart": [],
+      "checkout": [],
+      "dismiss": []
+    },
+    "eventSteps": {}
+  },
+  "performance": {
+    "minRuns": 10,
+    "maxRuns": 20,
+    "warmups": 3,
+    "countedRuns": 3,
+    "cpuRate": null,
+    "ignoreLcpSelectors": [".loading__image"],
+    "ignoreTemplates": ["customers/*", "gift_card*", "robots.txt", "password"],
+    "thresholds": { "lcpPercent": 10, "lcpMinMs": 100, "fcpPercent": 10, "fcpMinMs": 100, "tbtPercent": 25, "tbtMinMs": 50, "clsAbsolute": 0.05 }
+  },
+  "ignore": {
+    "codeRules": [],
+    "consoleErrorPatterns": []
+  },
+  "accepted": []
+}
