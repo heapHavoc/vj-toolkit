@@ -39,10 +39,12 @@ One TDD, one track. A project with a global standards doc and per-page sprint do
 ### Full Pipeline (Feature Development)
 
 ```
-/clickup → /figma → /clarify → /plan → /execute → /compare → /assess → /fix (if needed)
+/clickup → /figma-rest → /clarify → /plan → /execute → /figma-verify → /assess → /fix (if needed)
 ```
 
-Start with `/clickup` when work originates from a ClickUp task (it ingests the task and routes to /clarify or /fix). Start with `/figma` when building from a Figma design. Skip both if working from text requirements only.
+Start with `/clickup` when work originates from a ClickUp task (it ingests the task and routes to /clarify or /fix). Start with `/figma-rest` (or paste a Figma link / Dev Mode prompt — the plugin hook routes it) when building from a Figma design. `/figma` (official MCP) and `/compare` still work as the MCP-based path. Skip both if working from text requirements only.
+
+Before a stage → main merge, run `/preflight`.
 
 Run `/grill-me` between `/plan` and `/execute` when the plan looks thin or hides assumptions. It interviews you one decision at a time, dependencies first, and writes the resolved decisions back into the plan.
 
@@ -51,7 +53,10 @@ Run `/grill-me` between `/plan` and `/execute` when the plan looks thin or hides
 ```
 /brainstorm  — Decompose a TDD into a roadmap of phases and PRDs (outer loop)
 /clickup     : Ingest a ClickUp task (title, description, mockups, comments, subtasks) OR act on one (add comment, change status, log time) via MCP
-/figma       — Extract design context from Figma (via MCP)
+/figma-rest  — Extract design context from Figma over the REST API (no MCP quota)
+/figma       — Extract design context from Figma (via the official MCP)
+/figma-verify — Measure the build against Figma, test interactions, sweep breakpoints, auto-fix
+/preflight   — Release readiness gate: diff staging vs live (code, performance, analytics)
 /grill-me    : Interrogate a plan, PRD, or spec branch by branch until shared understanding
 /fix         — Bug fixing with first-principles Root Cause Analysis
 /assess      — First-principles verification against requirements and standards
@@ -67,12 +72,15 @@ Run `/grill-me` between `/plan` and `/execute` when the plan looks thin or hides
 | Project / page from a TDD | `/brainstorm` | /brainstorm → then the feature pipeline per PRD |
 | ClickUp → Feature | `/clickup` | /clickup → /clarify → /plan → /execute → /assess |
 | ClickUp → Bug | `/clickup` | /clickup → /fix → /assess |
-| Figma → Feature | `/figma` | /figma → /clarify → /plan → /execute → /compare → /assess → /fix |
+| Figma → Feature | `/figma-rest` | /figma-rest → /clarify → /plan → /execute → /figma-verify → /assess → /fix |
+| Figma → Feature (MCP) | `/figma` | /figma → /clarify → /plan → /execute → /compare → /assess → /fix |
 | Feature Development | `/clarify` | /clarify → /plan → /execute → /assess → /fix |
 | Pressure-test a plan | `/grill-me` | after /plan, before /execute |
 | Bug Fixing | `/fix` | standalone with first-principles RCA |
 | Assessment | `/assess` | standalone or after /execute |
 | Visual Comparison | `/compare` | after /execute when Figma screenshots exist |
+| Figma Verification | `/figma-verify` | after /execute when built with /figma-rest; `check-only` after /fix |
+| Release Gate | `/preflight` | before / right after a stage → main merge, or to snapshot a baseline |
 | Research | `/research` | standalone web search |
 | Understand Code | `/understand` | standalone deep trace |
 
@@ -84,12 +92,15 @@ Run `/grill-me` between `/plan` and `/execute` when the plan looks thin or hides
 |-------|---------|----------------|-----------------|
 | `/brainstorm` | Decompose a TDD into phases and self-contained PRDs | TDD / project brief | `docs/roadmap-{track}/` — PRDs, `README.md`, `status-log.md` |
 | `/clickup` | Ingest a ClickUp task (route to /clarify or /fix), or act on one (comment, status, time) via MCP | ClickUp task ID / URL, or an instruction | `clickup-context.md` + `clickup-images/` (ingest), or a ClickUp write (action) |
+| `/figma-rest` | Extract design context from Figma via the REST API (personal access token, no MCP quota) | Figma URL(s) or a Dev Mode prompt | `design-context.md` + `sections.json` + `figma-dumps/` + screenshots + assets |
 | `/figma` | Extract design context from Figma via MCP | Figma URL(s) | `design-context.md` + screenshots |
 | `/clarify` | Define requirements, research, challenge user | User request | `clarify.md` |
 | `/plan` | Technical specification with per-file decisions | `clarify.md` | `plan.md` |
 | `/grill-me` | Interrogate a plan decision by decision, dependencies first, until shared understanding | `plan.md` / `clarify.md` / a roadmap PRD | `grill-log.md` + amendments to the target |
 | `/execute` | Build all files in-context with full visibility | `plan.md` | code files + `execution-log.md` |
 | `/compare` | Visual comparison of code vs Figma screenshots | `selectors.json` + Figma screenshots | `comparison-report.md` |
+| `/figma-verify` | Measured Figma match at the frame widths, 11-width sweep, interaction tests, one gate then auto-fix loop | `sections.json` + `figma-dumps/` + `selectors.json` + dev server | `verify-report.md` + `verify/round-N/` + `fix-log.md` |
+| `/preflight` | Release readiness gate (stage → main), reports only what the release changes | preview + live theme | `.buildspace/preflight/` report |
 | `/assess` | First-principles verification (requirements + standards + integration) | `execution-log.md` + `clarify.md` | `assessment-report.md` |
 | `/fix` | First-principles RCA + fix all instances (waits for approval) | `assessment-report.md` or bug report | `fix-log.md` |
 | `/understand` | Deep code explanation | file/section/feature name | conversation output |
@@ -112,6 +123,7 @@ Run `/grill-me` between `/plan` and `/execute` when the plan looks thin or hides
 | `codebase-analyzer` | `/plan` | sonnet | Discovers naming conventions, reusable code, potential conflicts |
 | `output-validator` | `/assess` | sonnet | Validates requirements coverage, edge cases, integration |
 | `code-reviewer` | `/assess` | sonnet | Reviews code quality against skill checklists |
+| `preflight-verifier` | `/preflight` | inherit | Verifies candidate findings for one layer against real code and measurements |
 
 **Direct build pattern:** `/execute` builds all files directly in the main context with full visibility across files. No agent dispatch during execution — standards are loaded via the Skill tool before each file type.
 
@@ -135,14 +147,15 @@ It reads the file list from `execution-log.md` and confirms every section is rea
     {feature-name}/
       clickup-context.md     <- /clickup output (task title, description, comments, subtasks)
       clickup-images/        <- /clickup output (downloaded mockups from the task)
-      design-context.md      <- /figma output (structured design specs)
+      design-context.md      <- /figma or /figma-rest output (structured design specs)
       clarify.md             <- /clarify output
       plan.md                <- /plan output
       grill-log.md           <- /grill-me output (resolved decisions, open questions)
       execution-log.md       <- /execute output
       selectors.json         <- /execute output (section->CSS selector map)
-      sections.json          <- /figma output (canonical section names + node IDs)
-      assets-manifest.json   <- /figma output (downloaded images + shopify:// refs)
+      sections.json          <- /figma or /figma-rest output (canonical section names + node IDs; figma-rest adds dumps + behaviour)
+      figma-dumps/           <- /figma-rest output (per-section layer dumps + .json specs, tokens, index)
+      assets-manifest.json   <- /figma or /figma-rest output (downloaded images + shopify:// refs)
       preview-url.txt        <- /compare output (reused on later runs)
       screenshots/           <- /figma + /compare output
         figma-{section}-desktop.png
@@ -152,6 +165,8 @@ It reads the file list from `execution-log.md` and confirms every section is rea
         diff-{section}-{viewport}.png   <- /compare, only when a section is flagged
         capture-manifest.json           <- /compare verdicts per section
       comparison-report.md   <- /compare output
+      verify/                <- /figma-verify output (tests.json, round-N screenshots and measurements)
+      verify-report.md       <- /figma-verify output
       assessment-report.md   <- /assess output
       fix-log.md             <- /fix output
 ```
@@ -202,12 +217,14 @@ Do not skip this step. The plugin skills have detailed rules and checklists that
 
 ## Hooks
 
-Copy `hooks/hooks.json` into your theme project's `.claude/settings.json` to enable the optional PostToolUse linters. Both are gated on the tool being installed locally, so they no-op silently in projects that don't use them:
+The plugin's `hooks/hooks.json` loads automatically when the plugin is enabled — don't copy it into the project's `.claude/settings.json` (that runs every hook twice). The PostToolUse linters are gated on the tool being installed locally, so they no-op silently in projects that don't use them:
 
 | File type | Runs | Requires |
 |---|---|---|
 | `.css` | `stylelint` | `stylelint` in the project's `node_modules` |
 | `.js` | `eslint` | `eslint` in the project's `node_modules` |
+
+A **UserPromptSubmit** hook routes any prompt containing a Figma link (including the Dev Mode "Implement this design from Figma" prompt) to `/figma-rest` instead of the quota-limited Figma MCP.
 
 **There is no per-file theme check hook.** The Shopify CLI's `theme check` accepts only `--path`, and passing a single file crashes it, so per-file checking is not possible. A whole-theme run takes about 3 seconds, and `/execute` runs one at the end of the build while `/assess` runs one as the verification gate. That covers it without a check on every edit.
 
@@ -221,5 +238,7 @@ Requires Shopify CLI installed (`npm install -g @shopify/cli`) for `/execute` an
 | ClickUp MCP Server | For /clickup skill | Connect ClickUp via your Claude integrations / `claude mcp add` |
 | Figma MCP Server | For /figma skill | `claude mcp add --transport http figma https://mcp.figma.com/mcp` |
 | Figma Pro+ plan | For /figma skill | Free plan = 6 calls/month; Pro = 200/day |
+| Figma personal access token | For /figma-rest | `FIGMA_TOKEN` in the project's `.env` (Figma → Settings → Security → Personal access tokens) |
+| Playwright + Chromium | For /figma-verify | the project's `@playwright/test` or `playwright`, plus `npx playwright install chromium` (`/compare` installs its own) |
 | Shopify CLI | For theme check hook | `npm install -g @shopify/cli` |
 | Node.js 18+ | For screenshot capture | nodejs.org |

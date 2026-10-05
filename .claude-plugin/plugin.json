@@ -1,7 +1,7 @@
 {
   "name": "shopify-theme-toolkit",
-  "description": "Orchestrated Shopify theme development workflow with skills, agents, and standards. Supports feature development, bug fixing, assessment, and code understanding through /clarify → /plan → /execute → /assess → /fix pipeline. Optional plan interrogation via /grill-me, two-way ClickUp integration via /clickup (task intake + comment/status/time updates) and design intake via /figma.",
-  "version": "3.5.0",
+  "description": "Orchestrated Shopify theme development workflow with skills, agents, and standards. Supports feature development, bug fixing, assessment, and code understanding through /clarify → /plan → /execute → /assess → /fix pipeline. Optional plan interrogation via /grill-me, two-way ClickUp integration via /clickup (task intake + comment/status/time updates) design intake via /figma-rest (REST, no MCP quota) or /figma, measured Figma verification with an auto-fix loop via /figma-verify, and a stage → main release gate via /preflight.",
+  "version": "3.6.0",
   "author": {
     "name": "Aditya Pasikanti"
   },
