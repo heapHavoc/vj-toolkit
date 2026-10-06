@@ -298,7 +298,7 @@ async function main() {
             .filter((s) => s.spec).map((s) => [path.join(dir, s.spec), { x: s.x, y: s.y, h: s.height }]));
           const placed = specs.map((f) => layerPos.get(f)).filter(Boolean);
           const origin = placed.length === specs.length && specs.length > 1
-            ? { x: Math.min(...placed.map((p) => p.x)), y: Math.min(...placed.map((p) => p.y)) }
+            ? { x: 0, y: Math.min(...placed.map((p) => p.y)) }
             : null;
           for (const file of specs) {
             if (!fs.existsSync(file)) {
