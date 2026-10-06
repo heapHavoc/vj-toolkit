@@ -129,9 +129,13 @@ async function handlePassword(page, password) {
  * to trigger lazy content, waits for fonts and images, returns to the top.
  */
 async function openPage(browser, { url, route, viewport, password, deviceScaleFactor = 1, freeze = true }) {
+  // Below 768px emulate a phone: touch input and (hover: none), so hover-revealed UI renders as on devices.
+  const touch = viewport.width < 768;
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height ?? 900 },
     deviceScaleFactor,
+    hasTouch: touch,
+    isMobile: touch,
   });
   const page = await context.newPage();
   const consoleErrors = [];
