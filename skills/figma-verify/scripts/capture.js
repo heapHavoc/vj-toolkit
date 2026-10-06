@@ -13,6 +13,10 @@
  *
  * Output: .buildspace/artifacts/{feature}/verify/round-{n}/
  *   code-{section}-{viewport}.png, compare-{section}-{viewport}.png, capture.json
+ *
+ * selectors.json entries may add `route` (a page other than --route) and
+ * `before` (steps from behaviour.js run first, e.g. open a menu or drawer).
+ * Such sections get their own fresh page.
  */
 
 'use strict';
@@ -20,7 +24,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  parseFlags, requireFlags, loadFeature, roundDir, launch, openPage, waitForImages, hideOverlays,
+  parseFlags, requireFlags, loadFeature, roundDir, launch, openPage, waitForImages, hideOverlays, sectionPage,
 } = require('./lib/pw');
 
 const USAGE = 'capture.js --feature <name> --url <dev-server> [--route /path] [--round 1] [--sections a,b] [--password pw]';
@@ -68,9 +72,8 @@ async function main() {
 
   try {
     for (const vp of Object.values(viewports)) {
-      const { context, page } = await openPage(browser, {
-        url: flags.url, route: flags.route, viewport: vp, password: flags.password, deviceScaleFactor: 2,
-      });
+      const pageOpts = { url: flags.url, route: flags.route, password: flags.password, deviceScaleFactor: 2 };
+      const { context, page: sharedPage } = await openPage(browser, { ...pageOpts, viewport: vp });
       for (const section of sections) {
         const figmaRel = section.screenshots?.[vp.name];
         if (!figmaRel) continue;
@@ -79,21 +82,28 @@ async function main() {
           results.push({ ...record, status: 'NO_SELECTOR' });
           continue;
         }
-        const loc = page.locator(section.selector).first();
-        if (!(await loc.count())) {
-          results.push({ ...record, status: 'NOT_FOUND', selector: section.selector });
-          continue;
-        }
-        if (!(await loc.isVisible())) {
-          results.push({ ...record, status: 'NOT_VISIBLE', selector: section.selector });
-          continue;
-        }
-        await loc.scrollIntoViewIfNeeded();
-        await waitForImages(page, section.selector);
-        const restore = await hideOverlays(page, section.selector);
-        const code = path.join(outDir, `code-${section.name}-${vp.name}.png`);
+        const sp = await sectionPage(browser, sharedPage, section, vp, pageOpts);
+        const { page } = sp;
         try {
-          await loc.screenshot({ path: code, animations: 'disabled', timeout: 30000 });
+          if (sp.error) {
+            results.push({ ...record, status: 'BEFORE_FAILED', note: sp.error });
+            continue;
+          }
+          const loc = page.locator(section.selector).first();
+          if (!(await loc.count())) {
+            results.push({ ...record, status: 'NOT_FOUND', selector: section.selector });
+            continue;
+          }
+          if (!(await loc.isVisible())) {
+            results.push({ ...record, status: 'NOT_VISIBLE', selector: section.selector });
+            continue;
+          }
+          await loc.scrollIntoViewIfNeeded();
+          await waitForImages(page, section.selector);
+          const restore = await hideOverlays(page, section.selector);
+          const code = path.join(outDir, `code-${section.name}-${vp.name}.png`);
+          try {
+            await loc.screenshot({ path: code, animations: 'disabled', timeout: 30000 });
         } finally {
           await restore();
         }
@@ -121,6 +131,9 @@ async function main() {
           codeSize: box ? `${Math.round(box.width)}×${Math.round(box.height)}` : null,
         });
         console.error(`[capture] ${vp.name}/${section.name} ✓`);
+        } finally {
+          await sp.close();
+        }
       }
       await context.close();
     }

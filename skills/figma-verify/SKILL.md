@@ -32,7 +32,13 @@ Scripts: `${CLAUDE_SKILL_DIR}/scripts/`. They use the project's own Playwright (
 1. Read `.buildspace/current-feature`, or use the feature named in `$ARGUMENTS`. If several features could apply, ask.
 2. Read these from `.buildspace/artifacts/{feature}/`:
    - `sections.json`: the sections, their Figma screenshots, dumps and behaviour. It must come from **figma-rest**, with `dumps` per section and a `.json` spec next to each dump. If the specs are missing, re-run the figma-rest extractor for the frames. This is free from the cache.
-   - `selectors.json`: `[{ "name", "selector" }]`, with names matching `sections.json`. If it's missing, build it:
+   - `selectors.json`: `[{ "name", "selector" }]`, with names matching `sections.json`. Optional per entry:
+     - `"route"`: the page this section lives on, when it isn't `--route` (e.g. one legal page per section, `/search?q=jeans` for results)
+     - `"before"`: steps (same format as `behaviour.js`) that put the section into the state Figma draws before it is captured, measured and swept: open the megamenu, the search drawer, the size guide, a filter. Use an array, or `{ "desktop": [...], "mobile": [...], "mobileBelow": 1024 }` when the steps differ by breakpoint. Add `{ "do": "waitFor", "selector": "..." }` so capture waits until the panel is visible.
+
+     Sections with `route` or `before` get their own fresh page, so an open menu never leaks into other sections. If a `before` step fails, the section is reported as `BEFORE_FAILED`; fix the steps, not the theme.
+
+     If `selectors.json` is missing, build it:
      - read the template and the section files from `execution-log.md`
      - pick a stable selector that wraps each section (prefer `data-*` or the section class)
      - write the file

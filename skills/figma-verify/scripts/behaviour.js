@@ -26,7 +26,7 @@
  * }
  *
  * Steps: click, hover, focus, press {key}, fill {value}, scroll {y|selector},
- *        swipe {dx, dy}, wait {ms}, snapshot {as}
+ *        swipe {dx, dy}, wait {ms}, waitFor {selector, state?, ms?}, snapshot {as}
  * Expect: visible, hidden, count {equals|min}, attr {name, equals|notEquals|exists},
  *         style {prop, equals|notEquals}, text {contains|equals},
  *         changed {prop, from}  — prop: x|y|width|height|transform|scrollLeft|scrollTop|<css property>
@@ -46,60 +46,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  parseFlags, requireFlags, loadFeature, roundDir, readJson, launch, openPage, resolveViewport,
+  parseFlags, requireFlags, loadFeature, roundDir, readJson, launch, openPage, resolveViewport, readProps, runStep,
 } = require('./lib/pw');
 
 const USAGE = 'behaviour.js --feature <name> --url <dev-server> [--route /path] [--round 1] [--tests file] [--only text] [--password pw]';
 
-async function readProps(page, selector) {
-  return page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    const cs = getComputedStyle(el);
-    const css = {};
-    for (const p of ['background-color', 'color', 'border-color', 'opacity', 'transform', 'max-height', 'visibility', 'display', 'text-decoration-line', 'box-shadow']) {
-      css[p] = cs.getPropertyValue(p);
-    }
-    return {
-      x: r.left, y: r.top, width: r.width, height: r.height,
-      transform: cs.transform, scrollLeft: el.scrollLeft, scrollTop: el.scrollTop, css,
-    };
-  }, selector);
-}
-
 const pick = (props, prop) => (props ? (prop in props ? props[prop] : props.css?.[prop]) : undefined);
-
-async function runStep(page, step, snapshots) {
-  const loc = step.selector ? page.locator(step.selector).first() : null;
-  switch (step.do) {
-    case 'click': await loc.scrollIntoViewIfNeeded(); await loc.click({ timeout: 5000 }); break;
-    case 'hover': await loc.scrollIntoViewIfNeeded(); await loc.hover({ timeout: 5000 }); break;
-    case 'focus': await loc.focus(); break;
-    case 'press': await (loc ? loc.press(step.key) : page.keyboard.press(step.key)); break;
-    case 'fill': await loc.fill(String(step.value ?? '')); break;
-    case 'wait': await page.waitForTimeout(step.ms ?? 300); break;
-    case 'scroll':
-      if (loc) await loc.scrollIntoViewIfNeeded();
-      else await page.evaluate((y) => window.scrollTo(0, y), step.y ?? 0);
-      await page.waitForTimeout(150);
-      break;
-    case 'swipe': {
-      await loc.scrollIntoViewIfNeeded();
-      const box = await loc.boundingBox();
-      const sx = box.x + box.width / 2;
-      const sy = box.y + box.height / 2;
-      await page.mouse.move(sx, sy);
-      await page.mouse.down();
-      await page.mouse.move(sx + (step.dx ?? -200), sy + (step.dy ?? 0), { steps: 12 });
-      await page.mouse.up();
-      await page.waitForTimeout(400);
-      break;
-    }
-    case 'snapshot': snapshots[step.as ?? 'before'] = await readProps(page, step.selector); break;
-    default: throw new Error(`Unknown step "${step.do}"`);
-  }
-}
 
 async function check(page, exp, snapshots) {
   const fail = (msg) => ({ ok: false, expect: exp, message: msg });

@@ -23,7 +23,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  parseFlags, requireFlags, loadFeature, roundDir, launch, openPage, hideOverlays,
+  parseFlags, requireFlags, loadFeature, roundDir, launch, openPage, hideOverlays, sectionPage,
 } = require('./lib/pw');
 
 const USAGE = 'sweep.js --feature <name> --url <dev-server> [--route /path] [--round 1] [--sections a,b] [--widths 320,768] [--password pw]';
@@ -84,29 +84,38 @@ async function main() {
   try {
     for (const width of widths) {
       const vp = { name: String(width), width, height: width < 600 ? 844 : 900 };
-      const { context, page, consoleErrors, failedRequests, platformNoise } = await openPage(browser, {
-        url: flags.url, route: flags.route, viewport: vp, password: flags.password,
-      });
-      const pageOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      const pageOpts = { url: flags.url, route: flags.route, password: flags.password };
+      const { context, page: sharedPage, consoleErrors, failedRequests, platformNoise } = await openPage(browser, { ...pageOpts, viewport: vp });
+      const pageOverflow = await sharedPage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       const row = { width, pageOverflow, sections: [] };
       for (const section of sections) {
         if (!section.selector) continue;
-        const data = await page.evaluate(inspect, { selector: section.selector, vw: width });
-        if (!data) {
-          row.sections.push({ section: section.name, status: 'NOT_FOUND' });
-          continue;
+        const sp = await sectionPage(browser, sharedPage, section, vp, pageOpts);
+        const { page } = sp;
+        try {
+          if (sp.error) {
+            row.sections.push({ section: section.name, status: 'BEFORE_FAILED', issues: [{ type: 'before', detail: sp.error }] });
+            continue;
+          }
+          const data = await page.evaluate(inspect, { selector: section.selector, vw: width });
+          if (!data) {
+            row.sections.push({ section: section.name, status: 'NOT_FOUND' });
+            continue;
+          }
+          const entry = { section: section.name, status: data.issues.length ? 'FAIL' : 'PASS', issues: data.issues };
+          if (data.issues.length) {
+            const loc = page.locator(section.selector).first();
+            await loc.scrollIntoViewIfNeeded();
+            const restore = await hideOverlays(page, section.selector);
+            const shot = path.join(outDir, `sweep-${section.name}-${width}.png`);
+            await loc.screenshot({ path: shot, animations: 'disabled' }).catch(() => {});
+            await restore();
+            entry.screenshot = path.relative(dir, shot);
+          }
+          row.sections.push(entry);
+        } finally {
+          await sp.close();
         }
-        const entry = { section: section.name, status: data.issues.length ? 'FAIL' : 'PASS', issues: data.issues };
-        if (data.issues.length) {
-          const loc = page.locator(section.selector).first();
-          await loc.scrollIntoViewIfNeeded();
-          const restore = await hideOverlays(page, section.selector);
-          const shot = path.join(outDir, `sweep-${section.name}-${width}.png`);
-          await loc.screenshot({ path: shot, animations: 'disabled' }).catch(() => {});
-          await restore();
-          entry.screenshot = path.relative(dir, shot);
-        }
-        row.sections.push(entry);
       }
       row.consoleErrors = [...new Set(consoleErrors)].slice(0, 10);
       row.failedRequests = [...new Set(failedRequests)].slice(0, 10);

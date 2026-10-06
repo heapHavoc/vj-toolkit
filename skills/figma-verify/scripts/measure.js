@@ -25,7 +25,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  parseFlags, requireFlags, loadFeature, roundDir, readJson, launch, openPage, waitForImages,
+  parseFlags, requireFlags, loadFeature, roundDir, readJson, launch, openPage, waitForImages, sectionPage,
 } = require('./lib/pw');
 
 const USAGE = 'measure.js --feature <name> --url <dev-server> [--route /path] [--round 1] [--sections a,b] [--password pw] [--pos-tol 2]';
@@ -259,58 +259,66 @@ async function main() {
 
   try {
     for (const vp of Object.values(viewports)) {
-      const { context, page } = await openPage(browser, { url: flags.url, route: flags.route, viewport: vp, password: flags.password });
+      const pageOpts = { url: flags.url, route: flags.route, password: flags.password };
+      const { context, page: sharedPage } = await openPage(browser, { ...pageOpts, viewport: vp });
       for (const section of sections) {
         const specs = (section.dumps?.[vp.name] ?? []).map((d) => path.join(dir, d.replace(/\.md$/, '.json')));
         if (!specs.length) continue;
         const entry = { section: section.name, viewport: vp.name, width: vp.width, issues: [], unmatched: [], extra: [] };
         report.push(entry);
         if (!section.selector) { entry.status = 'NO_SELECTOR'; continue; }
-        if (!(await page.locator(section.selector).first().count())) { entry.status = 'NOT_FOUND'; continue; }
-        await page.locator(section.selector).first().scrollIntoViewIfNeeded();
-        await waitForImages(page, section.selector);
-        const dom = await page.evaluate(collect, section.selector);
-        if (!dom) { entry.status = 'NOT_FOUND'; continue; }
+        const sp = await sectionPage(browser, sharedPage, section, vp, pageOpts);
+        const { page } = sp;
+        try {
+          if (sp.error) { entry.status = 'BEFORE_FAILED'; entry.note = sp.error; continue; }
+          if (!(await page.locator(section.selector).first().count())) { entry.status = 'NOT_FOUND'; continue; }
+          await page.locator(section.selector).first().scrollIntoViewIfNeeded();
+          await waitForImages(page, section.selector);
+          const dom = await page.evaluate(collect, section.selector);
+          if (!dom) { entry.status = 'NOT_FOUND'; continue; }
 
-        const figma = { texts: [], images: [], section: null };
-        for (const file of specs) {
-          if (!fs.existsSync(file)) {
-            entry.status = 'NO_SPEC';
-            entry.note = `missing ${path.relative(dir, file)} — re-run figma-rest extract (it writes .json specs)`;
-            continue;
+          const figma = { texts: [], images: [], section: null };
+          for (const file of specs) {
+            if (!fs.existsSync(file)) {
+              entry.status = 'NO_SPEC';
+              entry.note = `missing ${path.relative(dir, file)} — re-run figma-rest extract (it writes .json specs)`;
+              continue;
+            }
+            const spec = readJson(file);
+            figma.section ??= spec.section;
+            figma.texts.push(...spec.texts);
+            figma.images.push(...spec.images);
           }
-          const spec = readJson(file);
-          figma.section ??= spec.section;
-          figma.texts.push(...spec.texts);
-          figma.images.push(...spec.images);
-        }
-        if (entry.status === 'NO_SPEC') continue;
+          if (entry.status === 'NO_SPEC') continue;
 
-        // Section box (single-node sections only — grouped sections differ by design)
-        if (specs.length === 1 && figma.section) {
-          const fs1 = figma.section;
-          if (Math.abs(fs1.width - dom.width) > TOL.size) entry.issues.push({ target: 'section', prop: 'width', figma: `${fs1.width}px`, code: `${r1(dom.width)}px` });
-          if (Math.abs(fs1.height - dom.height) > TOL.size + 1) entry.issues.push({ target: 'section', prop: 'height', figma: `${fs1.height}px`, code: `${r1(dom.height)}px` });
-          if (fs1.background && colorDiff(fs1.background, dom.background)) entry.issues.push({ target: 'section', prop: 'background', figma: fs1.background, code: dom.background });
-        }
-
-        const { pairs, extra } = matchTexts(figma.texts, dom.texts);
-        for (const p of pairs) {
-          if (!p.dom) { entry.unmatched.push(p.figma.text.slice(0, 60)); continue; }
-          if (p.how === 'prefix' && norm(p.figma.text) !== norm(p.dom.text)) {
-            entry.issues.push({ target: `text "${p.figma.text.trim().slice(0, 40)}"`, prop: 'copy', figma: JSON.stringify(p.figma.text.trim().slice(0, 80)), code: JSON.stringify(p.dom.text.trim().slice(0, 80)) });
+          // Section box (single-node sections only — grouped sections differ by design)
+          if (specs.length === 1 && figma.section) {
+            const fs1 = figma.section;
+            if (Math.abs(fs1.width - dom.width) > TOL.size) entry.issues.push({ target: 'section', prop: 'width', figma: `${fs1.width}px`, code: `${r1(dom.width)}px` });
+            if (Math.abs(fs1.height - dom.height) > TOL.size + 1) entry.issues.push({ target: 'section', prop: 'height', figma: `${fs1.height}px`, code: `${r1(dom.height)}px` });
+            if (fs1.background && colorDiff(fs1.background, dom.background)) entry.issues.push({ target: 'section', prop: 'background', figma: fs1.background, code: dom.background });
           }
-          for (const issue of compareText(p.figma, p.dom, posTol)) {
-            entry.issues.push({ target: `text "${p.figma.text.trim().slice(0, 40)}"`, element: `${p.dom.tag}${p.dom.cls ? `.${p.dom.cls.split(/\s+/)[0]}` : ''}`, ...issue });
-          }
-        }
-        entry.extra = extra.slice(0, 20);
-        for (const issue of compareImages(figma.images, dom.images)) entry.issues.push({ target: 'image', ...issue });
 
-        entry.matchedTexts = pairs.filter((p) => p.dom).length;
-        entry.figmaTexts = pairs.length;
-        entry.status = entry.issues.length ? 'FAIL' : 'PASS';
-        console.error(`[measure] ${vp.name}/${section.name}: ${entry.status} (${entry.issues.length} issue(s), ${entry.unmatched.length} unmatched)`);
+          const { pairs, extra } = matchTexts(figma.texts, dom.texts);
+          for (const p of pairs) {
+            if (!p.dom) { entry.unmatched.push(p.figma.text.slice(0, 60)); continue; }
+            if (p.how === 'prefix' && norm(p.figma.text) !== norm(p.dom.text)) {
+              entry.issues.push({ target: `text "${p.figma.text.trim().slice(0, 40)}"`, prop: 'copy', figma: JSON.stringify(p.figma.text.trim().slice(0, 80)), code: JSON.stringify(p.dom.text.trim().slice(0, 80)) });
+            }
+            for (const issue of compareText(p.figma, p.dom, posTol)) {
+              entry.issues.push({ target: `text "${p.figma.text.trim().slice(0, 40)}"`, element: `${p.dom.tag}${p.dom.cls ? `.${p.dom.cls.split(/\s+/)[0]}` : ''}`, ...issue });
+            }
+          }
+          entry.extra = extra.slice(0, 20);
+          for (const issue of compareImages(figma.images, dom.images)) entry.issues.push({ target: 'image', ...issue });
+
+          entry.matchedTexts = pairs.filter((p) => p.dom).length;
+          entry.figmaTexts = pairs.length;
+          entry.status = entry.issues.length ? 'FAIL' : 'PASS';
+          console.error(`[measure] ${vp.name}/${section.name}: ${entry.status} (${entry.issues.length} issue(s), ${entry.unmatched.length} unmatched)`);
+        } finally {
+          await sp.close();
+        }
       }
       await context.close();
     }
