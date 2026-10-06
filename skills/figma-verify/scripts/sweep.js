@@ -57,7 +57,8 @@ function inspect({ selector, vw }) {
       if (outside++ < 8) issues.push({ type: 'outside-viewport', element: describe(el), detail: `left ${Math.round(r.left)} right ${Math.round(r.right)} (viewport ${vw})` });
     }
     const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
-    if (own && el.scrollWidth > el.clientWidth + 2 && /(hidden|clip)/.test(cs.overflowX) && cs.textOverflow !== 'ellipsis') {
+    const visuallyHidden = r.width <= 1 && r.height <= 1;
+    if (own && !visuallyHidden && el.scrollWidth > el.clientWidth + 2 && /(hidden|clip)/.test(cs.overflowX) && cs.textOverflow !== 'ellipsis') {
       issues.push({ type: 'text-cut', element: describe(el), detail: `content ${el.scrollWidth}px in ${el.clientWidth}px box` });
     }
   }

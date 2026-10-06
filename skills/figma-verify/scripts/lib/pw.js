@@ -65,7 +65,9 @@ function loadFeature(feature, { only } = {}) {
     if (!fs.existsSync(idx)) continue;
     const index = readJson(idx);
     const [w, h] = String(index.rootSize).split('×').map(Number);
-    viewports[vp] = { name: vp, width: Math.round(w), height: Math.min(Math.round(h) || 900, vp === 'mobile' ? 874 : 900) };
+    // Overlay/drawer frames are drawn at a real screen height (viewportHeight); pages are capped like a screen.
+    const height = index.viewportHeight ?? Math.min(Math.round(h) || 900, vp === 'mobile' ? 874 : 900);
+    viewports[vp] = { name: vp, width: Math.round(w), height };
   }
 
   const wanted = only ? new Set(String(only).split(',').map((s) => s.trim())) : null;
