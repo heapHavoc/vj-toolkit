@@ -293,8 +293,9 @@ async function main() {
           // A section grouped from several Figma layers: each spec is relative to its own layer, so shift it
           // by the layer's position within the group (from the frame index).
           const indexFile = path.join(dir, 'figma-dumps', `${vp.name}-index.json`);
-          const layerPos = new Map((fs.existsSync(indexFile) ? readJson(indexFile).sections : [])
-            .filter((s) => s.spec).map((s) => [path.join(dir, s.spec), { x: s.x, y: s.y }]));
+          const frameLayers = fs.existsSync(indexFile) ? readJson(indexFile).sections : [];
+          const layerPos = new Map(frameLayers
+            .filter((s) => s.spec).map((s) => [path.join(dir, s.spec), { x: s.x, y: s.y, h: s.height }]));
           const placed = specs.map((f) => layerPos.get(f)).filter(Boolean);
           const origin = placed.length === specs.length && specs.length > 1
             ? { x: Math.min(...placed.map((p) => p.x)), y: Math.min(...placed.map((p) => p.y)) }
@@ -322,6 +323,19 @@ async function main() {
             for (const t of dom.texts) t.x += dom.left;
             for (const i of dom.images) i.x += dom.left;
             entry.note = `code section is ${Math.round(dom.width)}px wide at x${Math.round(dom.left)}; x compared on the page`;
+          }
+
+          // Grouped section: its height runs from the top layer to the bottom layer, so extra top/bottom
+          // padding in code shows up here even though every text position matches.
+          // The gap below the last layer belongs to this section in code (its bottom padding), so measure up to
+          // the next layer in the frame (including header/footer chrome), or the last layer's bottom if none follows.
+          if (origin) {
+            const bottom = Math.max(...placed.map((p) => p.y + p.h));
+            const nextTop = Math.min(...frameLayers.map((l) => l.y).filter((y) => y >= bottom - 1), Infinity);
+            const groupHeight = (Number.isFinite(nextTop) ? nextTop : bottom) - origin.y;
+            if (Math.abs(groupHeight - dom.height) > TOL.size + 1) {
+              entry.issues.push({ target: 'section', prop: 'height', figma: `${r1(groupHeight)}px (${specs.length} layers, to the next layer)`, code: `${r1(dom.height)}px` });
+            }
           }
 
           // Section box (single-node sections only — grouped sections differ by design)

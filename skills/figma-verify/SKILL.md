@@ -189,6 +189,7 @@ If the answer is fix, run the loop **without further questions**:
    - Never commit, push or change branches.
 2. **Log** each change in `fix-log.md`: round, section, failure, root cause, file:line, and what changed.
 3. **Rebuild CSS if needed:** if Tailwind classes changed, run the project's CSS build (`npm run build`, or confirm `npm run dev` is watching). Then wait about 2 seconds for the dev server to sync.
+   - **Template or settings changed** (`templates/*.json`, `sections/*-group.json`, `config/settings_data.json`)? `shopify theme dev` can fail to upload them, so the local server shows the new value while the development theme the user previews keeps the old one. Push only the changed file to the development theme (`shopify theme push --development --only <file> --nodelete`, never the live theme) and say so in the fix log.
 4. **Re-verify** only the sections touched in this round (`--sections`) with `--round N+1`.
    - Run a full sweep and all behaviour tests on the final round, to catch regressions.
 5. **Stop** when any of these happens:
@@ -200,6 +201,8 @@ If the answer is fix, run the loop **without further questions**:
 Items that need a decision never block the loop. Collect them for the final report.
 
 ## Step 7: Final Report & Hand-off
+
+**Before reporting, look.** Open the final `compare-{section}-{viewport}.png` of every section fixed in this run, and of every section the user asked to fix. Check the empty space too (padding above/below, gaps to the next section), not only the content: measured text positions can all pass while a section carries extra padding. Anything that still looks different goes back into the loop or into Unfixed mismatches.
 
 Update `verify-report.md` with the final round and show the user:
 1. the result per section, across rounds (e.g. `R1 3/7 → R3 7/7`)
