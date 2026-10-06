@@ -203,6 +203,8 @@ Items that need a decision never block the loop. Collect them for the final repo
 
 ## Step 7: Final Report & Hand-off
 
+**Figma screenshots of grouped sections:** when you crop them out of a full-frame export, compute the scale from the image (`image width ÷ frame width`). Figma downscales exports past its render-size limit; a 10,360px desktop frame came back at 1.5× instead of 2×, so 2×-based crops showed the wrong region.
+
 **Before reporting, look.** Open the final `compare-{section}-{viewport}.png` of every section fixed in this run, and of every section the user asked to fix. Check the empty space too (padding above/below, gaps to the next section), not only the content: measured text positions can all pass while a section carries extra padding. Anything that still looks different goes back into the loop or into Unfixed mismatches.
 
 Update `verify-report.md` with the final round and show the user:

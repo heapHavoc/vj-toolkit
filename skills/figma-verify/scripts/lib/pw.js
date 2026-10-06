@@ -132,6 +132,22 @@ async function handlePassword(page, password) {
  * Opens a page and makes it deterministic enough to measure: scrolls through
  * to trigger lazy content, waits for fonts and images, returns to the top.
  */
+/**
+ * Navigates and checks the document status. The local dev server sometimes answers 401/5xx for a while
+ * (expired session), so retry, then fail loudly instead of reporting every section as NOT_FOUND.
+ */
+async function gotoChecked(page, target) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const status = response?.status() ?? 200;
+    if (status !== 401 && status < 500) return;
+    if (attempt === 3) {
+      throw new Error(`${target} answered HTTP ${status} three times. Restart \`shopify theme dev\`, or verify on the preview theme: --url https://<store>.myshopify.com --route "<route>?preview_theme_id=<id>" --password <pw>`);
+    }
+    await page.waitForTimeout(1500 * attempt);
+  }
+}
+
 async function openPage(browser, { url, route, viewport, password, deviceScaleFactor = 1, freeze = true }) {
   // Below 768px emulate a phone: touch input and (hover: none), so hover-revealed UI renders as on devices.
   const touch = viewport.width < 768;
@@ -162,9 +178,14 @@ async function openPage(browser, { url, route, viewport, password, deviceScaleFa
     else platformNoise.push(`${res.status()} ${u.slice(0, 120)}`);
   });
 
-  await page.goto(joinUrl(url, route), { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await gotoChecked(page, joinUrl(url, route));
   if (await handlePassword(page, password)) {
-    await page.goto(joinUrl(url, route), { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // Theme scripts also ran on the password page (e.g. a cart fetch answered with that HTML page);
+    // only errors from the real page count.
+    consoleErrors.length = 0;
+    failedRequests.length = 0;
+    platformNoise.length = 0;
+    await gotoChecked(page, joinUrl(url, route));
   }
   await page.waitForLoadState('load', { timeout: 30000 }).catch(() => {});
   if (freeze) {
@@ -287,7 +308,7 @@ async function runStep(page, step, snapshots = {}) {
       await loc.scrollIntoViewIfNeeded();
       const box = await loc.boundingBox();
       const sx = box.x + box.width / 2;
-      const sy = box.y + box.height / 2;
+      const sy = box.y + box.height * (step.at ?? 0.5);
       await page.mouse.move(sx, sy);
       await page.mouse.down();
       await page.mouse.move(sx + (step.dx ?? -200), sy + (step.dy ?? 0), { steps: 12 });

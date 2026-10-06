@@ -72,6 +72,15 @@ const r1 = (n) => Math.round(n * 10) / 10;
 // ── Browser-side collection ─────────────────────────────────────
 
 function collect(selector) {
+  // Shopify wraps each section in a transparent div; the section's own element carries the background.
+  const sectionBackground = (el, styles) => {
+    const transparent = (c) => c === 'transparent' || /rgba\(.*,\s*0\)$/.test(c);
+    if (!transparent(styles.backgroundColor) || el.children.length !== 1) return styles.backgroundColor;
+    const child = el.children[0];
+    const a = el.getBoundingClientRect();
+    const b = child.getBoundingClientRect();
+    return b.width * b.height >= a.width * a.height * 0.95 ? getComputedStyle(child).backgroundColor : styles.backgroundColor;
+  };
   const root = document.querySelector(selector);
   if (!root) return null;
   const box = root.getBoundingClientRect();
@@ -156,7 +165,7 @@ function collect(selector) {
     left: rb.left + window.scrollX,
     width: rb.width,
     height: rb.height,
-    background: cs.backgroundColor,
+    background: sectionBackground(root, cs),
     padding: [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].map(parseFloat),
     texts,
     images,
