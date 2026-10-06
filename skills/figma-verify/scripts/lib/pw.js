@@ -113,15 +113,17 @@ function joinUrl(base, route = '/') {
   return new URL(route || '/', base.endsWith('/') ? base : `${base}/`).toString();
 }
 
+/** Unlocks a password-protected storefront. Returns true if it did (the store then redirects to /). */
 async function handlePassword(page, password) {
-  if (!password) return;
+  if (!password) return false;
   const input = await page.$('input[type="password"]');
-  if (!input) return;
+  if (!input) return false;
   await input.fill(password);
   await Promise.all([
-    page.waitForLoadState('domcontentloaded'),
+    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
     page.keyboard.press('Enter'),
   ]);
+  return true;
 }
 
 /**
@@ -159,7 +161,9 @@ async function openPage(browser, { url, route, viewport, password, deviceScaleFa
   });
 
   await page.goto(joinUrl(url, route), { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await handlePassword(page, password);
+  if (await handlePassword(page, password)) {
+    await page.goto(joinUrl(url, route), { waitUntil: 'domcontentloaded', timeout: 60000 });
+  }
   await page.waitForLoadState('load', { timeout: 30000 }).catch(() => {});
   if (freeze) {
     await page.addStyleTag({

@@ -57,7 +57,7 @@ node ${CLAUDE_SKILL_DIR}/scripts/detect-server.js
 Write the URL you use to `preview-url.txt`, so `/compare` and later runs reuse it. Never store a password on disk.
 - If no server is found, ask the user to start it (`npm run shopify` / `shopify theme dev`) and give them the `!` command. Don't start it yourself.
 - Route: take it from `plan.md`/`clarify.md` (template + a handle with real data, e.g. `/products/<handle>`). Ask if it's unclear. For a template-specific route, add `?view=` if the plan uses an alternate template.
-- If the storefront is password-protected, use `--password` (ask once).
+- If the storefront is password-protected, use `--password` (ask once, never write it to a file). The scripts unlock the store and reopen the route. To verify on the user's preview theme rather than the local server, use the store URL with `?preview_theme_id=<id>` in the route. That also avoids the dev server's CORS blocks on `type="module"` scripts.
 
 Shared flags for every script: `--feature {feature} --url {url} --route {route} --round {n}`. Add `--sections a,b` to re-check only some sections. Write the flags out in each command. The shell is zsh, which doesn't word-split a `$FLAGS` variable.
 
@@ -68,6 +68,7 @@ Write tests only from evidence: prototype data, dump signals, the Figma geometry
 Write `.buildspace/artifacts/{feature}/verify/tests.json` once (round 1). Then keep it, and extend it only if you discover new behaviour.
 
 For every section, turn its `behaviour` (sections.json), its dump's **Behaviour signals** and the relevant `clarify.md` decisions into concrete tests:
+- **scope every selector to its section** (prefix it with the section's selector from `selectors.json`). Drawers, menus and quick-add panels render hidden copies of the same components, so a bare `[data-*]` often matches an invisible element first and the test times out.
 - read the section's Liquid/JS to get real selectors (prefer `data-*` hooks; `selectors.json` → `hooks` lists them when `/execute` wrote it)
 - test explicit prototype interactions and states first, then inferred ones that `clarify.md` confirmed
 - **never test behaviour that clarify left out of scope**
