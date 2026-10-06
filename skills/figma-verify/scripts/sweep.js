@@ -64,7 +64,7 @@ function inspect({ selector, vw }) {
   if (outside > 8) issues.push({ type: 'outside-viewport', detail: `…and ${outside - 8} more` });
 
   for (const img of root.querySelectorAll('img')) {
-    if (img.complete && img.naturalWidth === 0 && img.getBoundingClientRect().width > 0) {
+    if ((img.getAttribute('src') || img.getAttribute('srcset')) && img.complete && img.naturalWidth === 0 && img.getBoundingClientRect().width > 0) {
       issues.push({ type: 'broken-image', element: (img.currentSrc || img.src || '').slice(0, 120) });
     }
   }

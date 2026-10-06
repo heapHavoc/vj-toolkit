@@ -24,7 +24,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  parseFlags, requireFlags, loadFeature, roundDir, launch, openPage, waitForImages, hideOverlays, sectionPage,
+  parseFlags, requireFlags, loadFeature, roundDir, launch, openPage, waitForImages, hideOverlays, sectionPage, scrollToNatural,
 } = require('./lib/pw');
 
 const USAGE = 'capture.js --feature <name> --url <dev-server> [--route /path] [--round 1] [--sections a,b] [--password pw]';
@@ -98,7 +98,7 @@ async function main() {
             results.push({ ...record, status: 'NOT_VISIBLE', selector: section.selector });
             continue;
           }
-          await loc.scrollIntoViewIfNeeded();
+          await scrollToNatural(page, section.selector);
           await waitForImages(page, section.selector);
           const restore = await hideOverlays(page, section.selector);
           const code = path.join(outDir, `code-${section.name}-${vp.name}.png`);

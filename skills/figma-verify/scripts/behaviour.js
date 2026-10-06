@@ -26,7 +26,8 @@
  * }
  *
  * Steps: click, hover, focus, press {key}, fill {value}, scroll {y|selector},
- *        swipe {dx, dy}, wait {ms}, waitFor {selector, state?, ms?}, snapshot {as}
+ *        swipe {dx, dy} (mouse drag, for JS carousels), wheel {dx, dy} (native overflow scrolling),
+ *        wait {ms}, waitFor {selector, state?, ms?}, snapshot {as}
  * Expect: visible, hidden, count {equals|min}, attr {name, equals|notEquals|exists},
  *         style {prop, equals|notEquals}, text {contains|equals},
  *         changed {prop, from}  — prop: x|y|width|height|transform|scrollLeft|scrollTop|<css property>

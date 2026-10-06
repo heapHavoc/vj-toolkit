@@ -198,6 +198,25 @@ async function waitForImages(page, scope = null, timeout = 12000) {
 }
 
 /**
+ * Scrolls the section into view without engaging its sticky children: the section top lands just below
+ * the largest sticky `top` inside it, so sticky columns sit where the (unscrolled) design draws them.
+ */
+async function scrollToNatural(page, selector) {
+  await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    let stickyTop = 0;
+    for (const n of [el, ...el.querySelectorAll('*')]) {
+      const cs = getComputedStyle(n);
+      if (cs.position === 'sticky') stickyTop = Math.max(stickyTop, parseFloat(cs.top) || 0);
+    }
+    const docTop = el.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo(0, Math.max(0, docTop - (stickyTop ? stickyTop + 1 : 0)));
+  }, selector);
+  await page.waitForTimeout(150);
+}
+
+/**
  * Hides fixed/sticky elements outside the target, and fixed elements inside it,
  * so they don't paint over an element screenshot. Returns a restore function.
  */
@@ -266,6 +285,14 @@ async function runStep(page, step, snapshots = {}) {
       await page.waitForTimeout(400);
       break;
     }
+    case 'wheel': {
+      await loc.scrollIntoViewIfNeeded();
+      const box = await loc.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.wheel(step.dx ?? 0, step.dy ?? 0);
+      await page.waitForTimeout(400);
+      break;
+    }
     case 'snapshot': snapshots[step.as ?? 'before'] = await readProps(page, step.selector); break;
     default: throw new Error(`Unknown step "${step.do}"`);
   }
@@ -322,6 +349,7 @@ module.exports = {
   settle,
   waitForImages,
   hideOverlays,
+  scrollToNatural,
   resolveViewport,
   joinUrl,
   readProps,

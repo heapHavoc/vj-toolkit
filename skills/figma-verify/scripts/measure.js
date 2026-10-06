@@ -25,7 +25,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  parseFlags, requireFlags, loadFeature, roundDir, readJson, launch, openPage, waitForImages, sectionPage,
+  parseFlags, requireFlags, loadFeature, roundDir, readJson, launch, openPage, waitForImages, sectionPage, scrollToNatural,
 } = require('./lib/pw');
 
 const USAGE = 'measure.js --feature <name> --url <dev-server> [--route /path] [--round 1] [--sections a,b] [--password pw] [--pos-tol 2]';
@@ -74,7 +74,12 @@ const r1 = (n) => Math.round(n * 10) / 10;
 function collect(selector) {
   const root = document.querySelector(selector);
   if (!root) return null;
-  const rb = root.getBoundingClientRect();
+  const box = root.getBoundingClientRect();
+  // A child pulled above the section with a negative margin (e.g. media under a transparent header)
+  // is where the design's section starts.
+  const childTop = Math.min(box.top, ...[...root.children]
+    .map((c) => c.getBoundingClientRect()).filter((r) => r.width || r.height).map((r) => r.top));
+  const rb = { left: box.left, top: childTop, width: box.width, height: box.bottom - childTop };
   const visible = (el) => {
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return false;
@@ -142,12 +147,13 @@ function collect(selector) {
       y: r.top - rb.top,
       w: r.width,
       h: r.height,
-      broken: tag === 'img' ? el.complete && el.naturalWidth === 0 : false,
+      broken: tag === 'img' ? Boolean(el.getAttribute('src') || el.getAttribute('srcset')) && el.complete && el.naturalWidth === 0 : false,
       objectFit: getComputedStyle(el).objectFit,
     });
   }
   const cs = getComputedStyle(root);
   return {
+    left: rb.left + window.scrollX,
     width: rb.width,
     height: rb.height,
     background: cs.backgroundColor,
@@ -158,6 +164,12 @@ function collect(selector) {
 }
 
 // ── Matching & comparison ───────────────────────────────────────
+
+/** Width of the Figma section: its spec box, or the widest grouped layer. */
+function placedWidth(figma, count) {
+  if (count === 1 && figma.section) return figma.section.width;
+  return Math.max(0, ...figma.texts.map((t) => t.x + t.w), ...figma.images.map((i) => i.x + i.w));
+}
 
 function matchTexts(figmaTexts, domTexts) {
   const used = new Set();
@@ -272,12 +284,21 @@ async function main() {
         try {
           if (sp.error) { entry.status = 'BEFORE_FAILED'; entry.note = sp.error; continue; }
           if (!(await page.locator(section.selector).first().count())) { entry.status = 'NOT_FOUND'; continue; }
-          await page.locator(section.selector).first().scrollIntoViewIfNeeded();
+          await scrollToNatural(page, section.selector);
           await waitForImages(page, section.selector);
           const dom = await page.evaluate(collect, section.selector);
           if (!dom) { entry.status = 'NOT_FOUND'; continue; }
 
           const figma = { texts: [], images: [], section: null };
+          // A section grouped from several Figma layers: each spec is relative to its own layer, so shift it
+          // by the layer's position within the group (from the frame index).
+          const indexFile = path.join(dir, 'figma-dumps', `${vp.name}-index.json`);
+          const layerPos = new Map((fs.existsSync(indexFile) ? readJson(indexFile).sections : [])
+            .filter((s) => s.spec).map((s) => [path.join(dir, s.spec), { x: s.x, y: s.y }]));
+          const placed = specs.map((f) => layerPos.get(f)).filter(Boolean);
+          const origin = placed.length === specs.length && specs.length > 1
+            ? { x: Math.min(...placed.map((p) => p.x)), y: Math.min(...placed.map((p) => p.y)) }
+            : null;
           for (const file of specs) {
             if (!fs.existsSync(file)) {
               entry.status = 'NO_SPEC';
@@ -286,13 +307,25 @@ async function main() {
             }
             const spec = readJson(file);
             figma.section ??= spec.section;
-            figma.texts.push(...spec.texts);
-            figma.images.push(...spec.images);
+            const at = origin ? layerPos.get(file) : null;
+            const move = (b) => (b ? { ...b, x: b.x + at.x - origin.x, y: b.y + at.y - origin.y } : b);
+            const shift = (item) => (at ? { ...move(item), ...(item.full ? { full: move(item.full) } : {}) } : item);
+            figma.texts.push(...spec.texts.map(shift));
+            figma.images.push(...spec.images.map(shift));
           }
           if (entry.status === 'NO_SPEC') continue;
 
+          // Figma draws the section across the whole frame but the code section is a centred container:
+          // compare x on the page, not within the section.
+          const fullFrame = placedWidth(figma, specs.length) >= vp.width - 2;
+          if (fullFrame && dom.width < vp.width - 2 && dom.left > 1) {
+            for (const t of dom.texts) t.x += dom.left;
+            for (const i of dom.images) i.x += dom.left;
+            entry.note = `code section is ${Math.round(dom.width)}px wide at x${Math.round(dom.left)}; x compared on the page`;
+          }
+
           // Section box (single-node sections only — grouped sections differ by design)
-          if (specs.length === 1 && figma.section) {
+          if (specs.length === 1 && figma.section && !(fullFrame && dom.width < vp.width - 2)) {
             const fs1 = figma.section;
             if (Math.abs(fs1.width - dom.width) > TOL.size) entry.issues.push({ target: 'section', prop: 'width', figma: `${fs1.width}px`, code: `${r1(dom.width)}px` });
             if (Math.abs(fs1.height - dom.height) > TOL.size + 1) entry.issues.push({ target: 'section', prop: 'height', figma: `${fs1.height}px`, code: `${r1(dom.height)}px` });
