@@ -35,6 +35,38 @@ function dataUri(file) {
   return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
 }
 
+/**
+ * Screenshots a section taller than the viewport slice by slice and stitches the slices. A single
+ * beyond-viewport capture makes Chromium drop touch emulation, so hover-revealed UI (shown on phones
+ * via `hover: none`) would disappear from mobile captures.
+ */
+async function tiledScreenshot(browser, page, selector, out) {
+  const vh = page.viewportSize().height;
+  const height = await page.evaluate((sel) => document.querySelector(sel).getBoundingClientRect().height, selector);
+  const tiles = [];
+  for (let offset = 0; offset < height; offset += vh) {
+    const rect = await page.evaluate(({ sel, offset: off }) => {
+      const el = document.querySelector(sel);
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo(0, top + off);
+      const r = el.getBoundingClientRect();
+      return { x: r.left, y: r.top + off, width: r.width };
+    }, { sel: selector, offset });
+    await page.waitForTimeout(200);
+    await waitForImages(page, selector, 4000);
+    const clipH = Math.min(vh - rect.y, height - offset);
+    if (clipH <= 0) break;
+    const buf = await page.screenshot({ clip: { x: rect.x, y: rect.y, width: rect.width, height: clipH }, animations: 'disabled' });
+    tiles.push(`data:image/png;base64,${buf.toString('base64')}`);
+    if (clipH < vh - rect.y) break;
+  }
+  const stitch = await browser.newPage({ deviceScaleFactor: 1 });
+  await stitch.setContent(`<!doctype html><html><body style="margin:0;display:inline-flex;flex-direction:column">${tiles.map((t) => `<img src="${t}" style="display:block">`).join('')}</body></html>`);
+  await stitch.evaluate(() => Promise.all([...document.images].map((i) => (i.complete ? null : new Promise((r) => { i.onload = r; })))));
+  await stitch.locator('body').screenshot({ path: out });
+  await stitch.close();
+}
+
 async function sideBySide(browser, { figma, code, out, title, crop }) {
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 });
   // Figma exports overflowing sections at their render bounds; crop to what the frame shows.
@@ -103,7 +135,11 @@ async function main() {
           const restore = await hideOverlays(page, section.selector);
           const code = path.join(outDir, `code-${section.name}-${vp.name}.png`);
           try {
-            await loc.screenshot({ path: code, animations: 'disabled', timeout: 30000 });
+            if (vp.width < 768 && (await loc.boundingBox()).height > page.viewportSize().height) {
+              await tiledScreenshot(browser, page, section.selector, code);
+            } else {
+              await loc.screenshot({ path: code, animations: 'disabled', timeout: 30000 });
+            }
         } finally {
           await restore();
         }
