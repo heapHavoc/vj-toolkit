@@ -801,7 +801,9 @@ function renderNode(node, parent, ctx, depth, lines, opts) {
 function helperReason(node, rootBox) {
   const b = bbox(node);
   if (HELPER_RE.test(String(node.name).trim())) return 'design helper / device chrome';
-  if (b.width > rootBox.width * 1.05) return `overlay wider than the frame (${round(b.width)}px)`;
+  // A horizontal row wider than the frame is a scrolling strip (carousel, swatches), not an overlay.
+  const scrollingRow = node.layoutMode === 'HORIZONTAL' || /HORIZONTAL/.test(node.overflowDirection ?? '');
+  if (b.width > rootBox.width * 1.05 && !scrollingRow) return `overlay wider than the frame (${round(b.width)}px)`;
   if (!node.children?.length && !['TEXT'].includes(node.type)
       && b.width >= rootBox.width * 0.95 && b.height >= rootBox.height * 0.95) return 'full-frame background layer';
   return null;
@@ -1006,7 +1008,8 @@ async function resolveDestinations(root, ctx, { fileKey, feature, token, refresh
 
 async function main() {
   const flags = parseFlags();
-  const { 'file-key': fileKey, 'node-id': nodeId, feature } = flags;
+  const { 'file-key': fileKey, feature } = flags;
+  const nodeId = flags['node-id'] && String(flags['node-id']).replace(/-/g, ':');
   if (!fileKey || !nodeId || !feature) {
     console.error('Usage: extract-figma-sections.js --file-key <key> --node-id <id> --feature <name> [--viewport auto|desktop|mobile] [--mode auto|page|section] [--include-chrome] [--no-variables] [--refresh] [--from-json <path>]');
     process.exit(1);

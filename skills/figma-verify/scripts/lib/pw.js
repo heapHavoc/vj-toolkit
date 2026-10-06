@@ -198,17 +198,19 @@ async function waitForImages(page, scope = null, timeout = 12000) {
 }
 
 /**
- * Hides fixed/sticky elements outside the target so they don't paint over an
- * element screenshot. Returns a restore function.
+ * Hides fixed/sticky elements outside the target, and fixed elements inside it,
+ * so they don't paint over an element screenshot. Returns a restore function.
  */
 async function hideOverlays(page, selector) {
   await page.evaluate((sel) => {
     const target = document.querySelector(sel);
     window.__verifyHidden = [];
     for (const el of document.querySelectorAll('body *')) {
-      if (target && (target.contains(el) || el.contains(target))) continue;
+      if (target && (el === target || el.contains(target))) continue;
       const pos = getComputedStyle(el).position;
-      if (pos === 'fixed' || pos === 'sticky') {
+      const inside = target && target.contains(el);
+      // Inside the section only fixed layers (e.g. a sticky buy bar) are overlays; sticky children are real content.
+      if (inside ? pos === 'fixed' : pos === 'fixed' || pos === 'sticky') {
         window.__verifyHidden.push([el, el.style.visibility]);
         el.style.visibility = 'hidden';
       }
