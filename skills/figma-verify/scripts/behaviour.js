@@ -110,7 +110,8 @@ async function check(page, exp, snapshots) {
   }
   if (exp.moving) {
     const loc = page.locator(exp.moving).first();
-    await loc.scrollIntoViewIfNeeded();
+    // A moving element is never "stable", so Playwright's scrollIntoViewIfNeeded would time out.
+    await loc.evaluate((el) => el.scrollIntoView({ block: 'center' }));
     const read = () => loc.evaluate((el) => {
       const r = el.getBoundingClientRect();
       return `${Math.round(r.left)}|${Math.round(r.top)}|${getComputedStyle(el).transform}|${el.scrollLeft}`;

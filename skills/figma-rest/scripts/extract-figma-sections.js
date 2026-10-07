@@ -803,7 +803,11 @@ function helperReason(node, rootBox) {
   if (HELPER_RE.test(String(node.name).trim())) return 'design helper / device chrome';
   // A horizontal row wider than the frame is a scrolling strip (carousel, swatches), not an overlay.
   const scrollingRow = node.layoutMode === 'HORIZONTAL' || /HORIZONTAL/.test(node.overflowDirection ?? '');
-  if (b.width > rootBox.width * 1.05 && !scrollingRow) return `overlay wider than the frame (${round(b.width)}px)`;
+  // Oversized display type set to bleed past both edges (e.g. a giant "1986") is content, not an overlay.
+  const hasText = (n) => n.type === 'TEXT' || (n.children ?? []).some(hasText);
+  const bleedsBothEdges = b.x <= rootBox.x && b.x + b.width >= rootBox.x + rootBox.width;
+  const bleedingType = bleedsBothEdges && b.width <= rootBox.width * 1.5 && hasText(node);
+  if (b.width > rootBox.width * 1.05 && !scrollingRow && !bleedingType) return `overlay wider than the frame (${round(b.width)}px)`;
   if (!node.children?.length && !['TEXT'].includes(node.type)
       && b.width >= rootBox.width * 0.95 && b.height >= rootBox.height * 0.95) return 'full-frame background layer';
   return null;
