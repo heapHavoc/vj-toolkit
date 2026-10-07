@@ -190,7 +190,7 @@ If the answer is fix, run the loop **without further questions**:
    - Never commit, push or change branches.
 2. **Log** each change in `fix-log.md`: round, section, failure, root cause, file:line, and what changed.
 3. **Rebuild CSS if needed:** if Tailwind classes changed, run the project's CSS build (`npm run build`, or confirm `npm run dev` is watching). Then wait about 2 seconds for the dev server to sync.
-   - **Template or settings changed** (`templates/*.json`, `sections/*-group.json`, `config/settings_data.json`)? `shopify theme dev` can fail to upload them, so the local server shows the new value while the development theme the user previews keeps the old one. Push only the changed file to the development theme (`shopify theme push --development --only <file> --nodelete`, never the live theme) and say so in the fix log.
+   - **Template or settings changed** (`templates/*.json`, `sections/*-group.json`, `config/settings_data.json`)? `shopify theme dev` can fail to upload them, so the local server shows the new value while the development theme the user previews keeps the old one. Push only the changed file to the project's development theme, naming the store and theme explicitly (`shopify theme push --store <store>.myshopify.com --theme <dev-theme-id> --only <file> --nodelete`; find them with `shopify theme list --store <store>`, never the live theme) and say so in the fix log. Never rely on `--development` alone: it targets the CLI's default store, which can be another project's.
 4. **Re-verify** only the sections touched in this round (`--sections`) with `--round N+1`.
    - Run a full sweep and all behaviour tests on the final round, to catch regressions.
 5. **Stop** when any of these happens:
