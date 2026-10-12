@@ -53,7 +53,7 @@ Context or overrides: `$ARGUMENTS` — may specify `--mode pre-merge|post-merge|
 
 All three checkers from the brief are wired in and complete: `check-code.mjs`, `check-performance.mjs`, `check-analytics.mjs`, each supporting all three modes. The two planned-but-not-built layers (`check-runtime.mjs`, `check-features.mjs`, brief §13) are not started — `run-preflight.mjs`'s `CHECKERS` list is where they'd be added; nothing else about the orchestrator or report changes when they land. Say so plainly in the report's **Not checked** section — do not imply broader coverage than what actually ran.
 
-Both browser-based checkers need Chromium via Playwright (performance also uses `lighthouse` + `chrome-launcher`, for diagnosis only). Missing dependencies, an unresolvable URL, or a broken page degrade to `SKIPPED`/`FAIL` with a reason — never a fabricated pass. This was verified in development: an early version of `check-performance.mjs` let a completely broken preview page's `null` metrics coerce to `0` in the delta math, reporting total breakage as a "speed improvement" — fixed, and now any invalid measurement is an explicit P0. `check-analytics.mjs` similarly had a bug where multi-page journey state was wiped by every `page.goto()` navigation, silently losing every event fired before the last page — fixed by pulling and merging captured state after each step, not just once at the end.
+Both browser-based checkers need Chromium via Playwright (performance also uses `lighthouse` + `chrome-launcher`, for diagnosis only). `run-preflight.mjs` installs them once per machine into a shared per-user folder (`lib/deps.mjs`; 1–3 min on the first run, instant afterwards, survives plugin updates). Tell the user when the first run is installing. `--no-install` skips it. Missing dependencies, an unresolvable URL, or a broken page degrade to `SKIPPED`/`FAIL` with a reason — never a fabricated pass. This was verified in development: an early version of `check-performance.mjs` let a completely broken preview page's `null` metrics coerce to `0` in the delta math, reporting total breakage as a "speed improvement" — fixed, and now any invalid measurement is an explicit P0. `check-analytics.mjs` similarly had a bug where multi-page journey state was wiped by every `page.goto()` navigation, silently losing every event fired before the last page — fixed by pulling and merging captured state after each step, not just once at the end.
 
 Neither browser checker has been run against a real live Shopify store end-to-end — only exercised against local test servers/pages that simulate GTM/GA4/Meta pixel and Lighthouse-measurable pages. Confirm with the user before treating a real client run's output as fully trustworthy on first use, per the brief's "expect a calibration period" note (§6) — this applies especially to `check-analytics.mjs`'s A6 (network beacons) and A7 (consent banner heuristic), and to `check-performance.mjs`'s preview-bar exclusion patterns, which are a best guess pending verification against a real client preview URL.
 
@@ -80,6 +80,7 @@ node ${CLAUDE_SKILL_DIR}/scripts/run-preflight.mjs \
   --config .buildspace/preflight/preflight.config.json
 ```
 
+- The first run on a machine installs Playwright, Lighthouse and Chromium (see Scope). If a previous run was detected but never finalized, it is saved to the run log before this one starts.
 - Unknown flags are rejected (exit 2) and `--help` prints usage — never guess a flag; run `--help` if unsure. The first line on stderr names the exact refs and SHAs being compared; if that isn't the comparison the user asked for, stop and say so.
 - **Pages** (pre-merge): by default the script tests every `config.pages` entry whose template renders a file this diff changed, plus `always: true` pages (a layout/global change selects every page). `--pages a,b` narrows, `--all-pages` widens, explicit `--live-url/--preview-url` (repeatable, `--page-name` per pair) overrides. A changed template with no configured page becomes a `PERF-COVERAGE-*` SKIPPED check — P0 if the template file itself changed, P1 if it only renders changed files.
 - **Journeys** (analytics): every `config.analytics.journeys` entry runs on both sides; preview params (`preview_theme_id`, `pb`, `productPreviewView`) are carried on every step. Each step records whether it really happened (add-to-cart confirmed via `/cart.js`, checkout intent observed) with a screenshot on failure; events whose step didn't run on both sides are SKIPPED, not passed.
@@ -111,6 +112,8 @@ If a verifier fails or times out, do not re-verify its items yourself in chat �
 node ${CLAUDE_SKILL_DIR}/scripts/finalize-preflight.mjs --root . --config .buildspace/preflight/preflight.config.json
 ```
 
+Finalize also archives the whole run to `.buildspace/preflight/runs/<started>-<mode>-<id>/` and sends its scrubbed run log (see **Run log** below). The summary JSON's `runLog` says where it was archived and whether it was sent, queued or rejected. This never changes the verdict or the exit code.
+
 Append `--post-pr` only for `--mode pre-merge`, and only if the user confirmed a PR exists and they want the report posted there. Otherwise `.buildspace/preflight/preflight-report.md` is the deliverable. The finalize summary JSON gives the verdict per layer and the item counts (confirmed / unverified / false alarm / accepted).
 
 Status model (per layer, never blended; overall = worst):
@@ -129,6 +132,26 @@ From the finalized report only. Tell the user:
 - What verification dismissed and why (one line each) — dismissals are where a verifier can be wrong.
 - Anything INCOMPLETE and exactly what would make it testable (a page to add, a selector to configure).
 - The report path and the **Not checked** list.
+- One line on the run log: archived path, and sent / queued for retry / off.
+
+End with exactly one question: **"Did preflight miss or misjudge anything on this release?"** It is optional, so don't wait on it or repeat it. Include the command that records the answer, so whoever relays the reply can run it with the user's own words (never paraphrased, never invented):
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/record-feedback.mjs --root . --text "<the user's answer, verbatim>"
+```
+
+---
+
+## Run log
+
+Every run is kept so the skill can be calibrated from real data instead of anecdotes. This is automatic: the scripts do it, you never write or send run data yourself.
+
+- **Local history:** each finalized run, each baseline, and each run that was detected but never finalized is copied to `.buildspace/preflight/runs/<started>-<mode>-<id>/` with a `run.json` (exactly what was sent). The newest 20 are kept (`PREFLIGHT_KEEP_RUNS`).
+- **Shared log:** `run.json` is sent to the toolkit's Supabase project through `public.ingest_preflight_run` with the publishable key (`telemetry/README.md`). It contains the run's mode, verdicts, durations, versions, who ran it, project, store domain, refs, every check's status, every finding with the verifier's verdict and reason, performance medians, and config without secrets.
+- **Never sent:** passwords, tokens, cookies, keys, shopper data (emails, client/user ids, names, addresses), URL query strings other than theme pinning, home-folder paths, screenshots, full Lighthouse reports and code.
+- **Failures never matter to the release:** a send that fails is queued in `pending/` and retried on the next run; one the server rejects goes to `rejected/`. Neither changes the verdict.
+- **Off switch:** `PREFLIGHT_TELEMETRY=0`, or `"telemetry": { "enabled": false }` in `preflight.config.json` for a client whose contract doesn't allow data to leave the machine. Local history is still kept.
+- **Analysis:** `node ${CLAUDE_SKILL_DIR}/scripts/analyze-runs.mjs --root .` summarizes local runs; the Supabase views (`preflight.check_accuracy`, `check_activity`, `skip_reasons`, `layer_health`, `post_merge_findings`, `feedback`, `by_version`, `recent_runs`) cover the whole team.
 
 ## Rules
 
@@ -136,5 +159,6 @@ From the finalized report only. Tell the user:
 - Never write, edit, or "fix up" a verifier's output file, and never present a raw (pre-finalize) status as the verdict.
 - Never post to a PR unless the user explicitly asked, mode is `pre-merge`, and `gh` confirms one exists for the staging branch.
 - Never invent a new status value, a new config key, or a fourth checker without asking first.
+- Never edit, delete or hand-write anything under `runs/`, `pending/` or `rejected/`, and never record feedback the user didn't give.
 - Do not re-implement a check that already exists in `code-reviewer`/`output-validator` at feature scope — `check-code.mjs` owns the release-scoped version of the same rules; keep it that way if you extend it.
 - A metric or event that returns no value (null) is never coerced into a delta calculation — it's `SKIPPED` for that one metric, or the whole check FAILs if it means the page itself is broken. This is a hard-won rule (see Scope above) — do not "simplify" it away when extending these scripts.

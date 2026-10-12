@@ -18,6 +18,9 @@
  *   YELLOW     any confirmed or unverified P1
  *   GREEN      none of the above
  * Exit code: 1 on RED or INCOMPLETE, 0 otherwise.
+ *
+ * Afterwards the run is archived to .buildspace/preflight/runs/ and its scrubbed
+ * run log is sent (lib/telemetry.mjs). That step never changes the verdict or exit code.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -25,6 +28,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } fr
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyDecisions, findAcceptance, layerStatus, mergeVerifications, overallStatus } from './lib/verdict.mjs';
+import { buildPayload, recordRun, telemetrySettings } from './lib/telemetry.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_PATH = path.join(__dirname, '..', 'templates', 'preflight-report-template.md');
@@ -191,7 +195,7 @@ export function renderReport({ raw, effective, statuses, overall, merged, verifi
 
 /* ── main ─────────────────────────────────────────────────────────────── */
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     process.stdout.write('Usage: node finalize-preflight.mjs --root . [--config path] [--verification file]... [--post-pr]\n');
@@ -239,7 +243,7 @@ function main() {
   const reportMd = renderReport({ raw, effective, statuses, overall, merged, verificationFiles: verifications.length ? verificationFiles : [] });
   const reportPath = path.join(outDir, 'preflight-report.md');
   writeFileSync(reportPath, reportMd);
-  writeFileSync(path.join(outDir, 'preflight-final.json'), JSON.stringify({ mode: raw.mode, overall, layers: effective.map((r, i) => ({ checker: r.checker, status: statuses[i] })), finalizedAt: new Date().toISOString(), comparison: raw.comparison, verificationFiles, addedFindings: merged.added, problems: merged.problems, reports: effective }, null, 2));
+  writeFileSync(path.join(outDir, 'preflight-final.json'), JSON.stringify({ runId: raw.runId || null, mode: raw.mode, overall, layers: effective.map((r, i) => ({ checker: r.checker, status: statuses[i] })), finalizedAt: new Date().toISOString(), comparison: raw.comparison, verificationFiles, addedFindings: merged.added, problems: merged.problems, reports: effective }, null, 2));
 
   const postPr = (args.postPr || raw.args?.postPr) && raw.mode === 'pre-merge';
   if (postPr) {
@@ -252,9 +256,19 @@ function main() {
     }
   }
 
+  let runLog = null;
+  if (raw.runId) {
+    try {
+      const payload = buildPayload({ stage: 'finalized', raw, final: { effective, statuses, overall, merged, verificationCount: verifications.length }, worklist, config, root: args.root, deps: raw.deps || null });
+      runLog = await recordRun({ outDir, payload, settings: telemetrySettings(config) });
+    } catch (err) {
+      console.error(`[finalize] could not record this run: ${err.message}`);
+    }
+  } else console.error('[finalize] preflight-raw.json has no runId (detected by an older run-preflight.mjs) — run not archived or sent.');
+
   const items = effective.flatMap((r) => (r.checks || []).flatMap((c) => c.items || []));
   const n = (s) => items.filter((i) => i.state === s).length;
-  console.log(JSON.stringify({ mode: raw.mode, overall, layers: effective.map((r, i) => ({ checker: r.checker, status: statuses[i], raw: raw.rawStatuses?.find((s) => s.checker === r.checker)?.status })), items: { confirmed: n('confirmed'), unverified: n('unverified'), falseAlarm: n('false_alarm'), accepted: n('accepted') }, added: merged.added.length, problems: merged.problems, verificationFiles: verifications.length, reportPath }, null, 2));
+  console.log(JSON.stringify({ runId: raw.runId || null, runLog: runLog ? { archived: runLog.archived && path.relative(args.root, runLog.archived), sent: runLog.sent } : null, mode: raw.mode, overall, layers: effective.map((r, i) => ({ checker: r.checker, status: statuses[i], raw: raw.rawStatuses?.find((s) => s.checker === r.checker)?.status })), items: { confirmed: n('confirmed'), unverified: n('unverified'), falseAlarm: n('false_alarm'), accepted: n('accepted') }, added: merged.added.length, problems: merged.problems, verificationFiles: verifications.length, reportPath }, null, 2));
   process.exitCode = overall === 'RED' || overall === 'INCOMPLETE' ? 1 : 0;
 }
 
@@ -267,10 +281,8 @@ function isRunDirectly() {
 }
 
 if (isRunDirectly()) {
-  try {
-    main();
-  } catch (err) {
+  main().catch((err) => {
     console.error(`finalize-preflight.mjs crashed: ${err.stack || err.message}`);
     process.exitCode = 1;
-  }
+  });
 }

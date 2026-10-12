@@ -100,7 +100,7 @@ Run `/grill-me` between `/plan` and `/execute` when the plan looks thin or hides
 | `/execute` | Build all files in-context with full visibility | `plan.md` | code files + `execution-log.md` |
 | `/compare` | Visual comparison of code vs Figma screenshots | `selectors.json` + Figma screenshots | `comparison-report.md` |
 | `/figma-verify` | Measured Figma match at the frame widths, 11-width sweep, interaction tests, one gate then auto-fix loop | `sections.json` + `figma-dumps/` + `selectors.json` + dev server | `verify-report.md` + `verify/round-N/` + `fix-log.md` |
-| `/preflight` | Release readiness gate (stage → main), reports only what the release changes | preview + live theme | `.buildspace/preflight/` report |
+| `/preflight` | Release readiness gate (stage → main), reports only what the release changes | preview + live theme | `.buildspace/preflight/` report, run history in `runs/`, run log sent to Supabase |
 | `/assess` | First-principles verification (requirements + standards + integration) | `execution-log.md` + `clarify.md` | `assessment-report.md` |
 | `/fix` | First-principles RCA + fix all instances (waits for approval) | `assessment-report.md` or bug report | `fix-log.md` |
 | `/understand` | Deep code explanation | file/section/feature name | conversation output |

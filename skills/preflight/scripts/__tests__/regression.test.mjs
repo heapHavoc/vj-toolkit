@@ -12,6 +12,7 @@
  *   #13 context-aware code rules (the false alarms from the first real run)
  *   #14 analytics steps that didn't run make dependent checks SKIPPED
  *   #15 performance A/B statistics: regressions found, noise and two-mode data never called regressions
+ *   #16 run logs: secrets/personal data scrubbed, every run archived, failed sends queued, never fatal
  *
  * No test framework — plain Node assertions, run with:
  *   node scripts/__tests__/regression.test.mjs
@@ -20,7 +21,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +31,9 @@ import { STANDARDS_RULES, classifyPlaceholder, findCssCollisions, parseCssRules,
 import { selectPages } from '../lib/page-map.mjs';
 import { verdict, mannWhitney, compareCounted, clsFromShifts, previewPathUrl, parseServerTiming } from '../lib/abtest.mjs';
 import { evaluateAnalytics, resolveJourneys, stepUrl, resolveSide } from '../check-analytics.mjs';
+import { archiveRun, buildPayload, flushPending, metricsFrom, recordRun, scrub, scrubUrl, telemetrySettings } from '../lib/telemetry.mjs';
+import { ensureDeps, nodePathWith } from '../lib/deps.mjs';
+import { summarize } from '../analyze-runs.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPTS_DIR = path.join(__dirname, '..');
@@ -383,6 +387,136 @@ await test('journeys: preview params and a PDP view are carried onto every step 
   const cart = new URL(stepUrl(side, '/cart'));
   assert.equal(cart.searchParams.get('preview_theme_id'), '9');
   assert.equal(cart.searchParams.get('view'), null, 'view is only applied to the PDP step');
+});
+
+await test('#16 scrub removes secrets, personal data, URL query strings and home paths', () => {
+  const home = os.homedir();
+  const out = scrub({
+    storefrontPassword: 'hunter2',
+    headers: { Authorization: 'Bearer abc', cookie: 'x=1' },
+    summary: { pass: 3, fail: 1 },
+    event: { email: 'shopper@mail.com', client_id: '123.456', currency: 'INR' },
+    note: `failed at https://shop.com/checkouts/cn/Z2NwLWFzaWEtc291dGhlYXN0MTowMUpaR1dQ?key=abc&preview_theme_id=9&pb=0 for ${home}/work/theme`,
+    asset: 'logo@2x.png',
+    contact: 'mail ops@acme.com',
+    page: { key: true },
+  });
+  assert.equal(out.storefrontPassword, '[redacted]');
+  assert.equal(out.headers.Authorization, '[redacted]');
+  assert.equal(out.headers.cookie, '[redacted]');
+  assert.deepEqual(out.summary, { pass: 3, fail: 1 }, 'numeric counts are never redacted');
+  assert.equal(out.event.email, '[redacted]');
+  assert.equal(out.event.client_id, '[redacted]');
+  assert.equal(out.event.currency, 'INR');
+  assert.ok(!out.note.includes('key=abc'), 'unknown query params dropped');
+  assert.ok(out.note.includes('preview_theme_id=9'), 'theme pinning params kept');
+  assert.ok(out.note.includes('/checkouts/cn/:token'), 'token-like path segments masked');
+  assert.ok(!out.note.includes(home) && out.note.includes('~/work/theme'), 'home folder shortened');
+  assert.equal(out.asset, 'logo@2x.png', 'asset names that look like emails are kept');
+  assert.equal(out.contact, 'mail [email]');
+  assert.equal(out.page.key, true, 'boolean config flags are kept');
+  assert.equal(scrubUrl('https://u:p@s.com/a?x=1#h'), 'https://s.com/a');
+});
+
+await test('#16 performance metrics are extracted per page, side and metric', () => {
+  const rows = metricsFrom([{ checker: 'performance', checks: [
+    { id: 'PERF-product-main-LCP', status: 'PASS', evidence: { reference: 'live', current: 'preview', medianReference: 2100, medianCurrent: 2300, n: [10, 12], excludedRuns: [{}, {}] } },
+    { id: 'PERF-home', status: 'INFO', evidence: { medians: { lcp: 1800, cls: 0.01 } } },
+    { id: 'PERF-home-COUNTED', status: 'PASS', evidence: {} },
+  ] }]);
+  assert.deepEqual(rows.find((r) => r.side === 'live'), { page: 'product-main', side: 'live', metric: 'LCP', value: 2100, runs: 10, excluded: 2 });
+  assert.equal(rows.find((r) => r.side === 'preview').value, 2300);
+  assert.equal(rows.filter((r) => r.side === 'baseline').length, 2);
+});
+
+function fakeFinal() {
+  const raw = {
+    runId: '11111111-2222-4333-8444-555555555555', mode: 'pre-merge', startedAt: '2026-10-12T10:00:00.000Z', generatedAt: '2026-10-12T10:05:00.000Z',
+    refs: { live: { ref: 'main', sha: 'a'.repeat(40) }, staging: { ref: 'stage', sha: 'b'.repeat(40) } },
+    rawStatuses: [{ checker: 'code', status: 'RED' }],
+    reports: [{ checker: 'code', durationMs: 1234, checks: [
+      { id: 'S7', name: 'Standards delta', priority: 'P1', status: 'FAIL', summary: 's', evidence: { findings: [{ file: 'a.css' }, { file: 'b.css' }] } },
+      { id: 'G5', name: 'Blast radius', priority: 'info', status: 'INFO', evidence: { sections: ['sections/a.liquid'], assets: ['assets/a.css', 'sections/a.liquid'] } },
+      { id: 'A1', name: 'dup', priority: 'P2', status: 'PASS' },
+      { id: 'A1', name: 'dup', priority: 'P2', status: 'PASS' },
+    ] }],
+  };
+  const worklist = buildWorklist(raw.reports, {});
+  const merged = mergeVerifications(worklist, [{ layer: 'code', items: [
+    { id: worklist.items[0].id, verdict: 'confirmed', evidence: 'a.css:1 real' },
+    { id: worklist.items[1].id, verdict: 'false_alarm', evidence: 'b.css:2 is scoped' },
+  ] }]);
+  const effective = applyDecisions(raw.reports, worklist, merged);
+  return { raw, worklist, merged, effective };
+}
+
+await test('#16 a finalized run becomes one payload with layers, deduped checks and verified findings', () => {
+  const { raw, worklist, merged, effective } = fakeFinal();
+  const p = buildPayload({ stage: 'finalized', raw, worklist, final: { effective, statuses: ['YELLOW'], overall: 'YELLOW', merged, verificationCount: 1 }, config: { store: 'https://example-store.com/' }, root: SCRIPTS_DIR, finishedAt: '2026-10-12T10:10:00.000Z' });
+  assert.equal(p.run_id, raw.runId);
+  assert.equal(p.overall, 'YELLOW');
+  assert.equal(p.duration_ms, 600000);
+  assert.equal(p.store_domain, 'example-store.com');
+  assert.equal(p.changed_files, 2);
+  assert.deepEqual(p.layers[0], { layer: 'code', raw_status: 'RED', final_status: 'YELLOW', duration_ms: 1234, crashed: false, error: null });
+  assert.deepEqual(p.checks.filter((c) => c.check_id.startsWith('A1')).map((c) => c.check_id), ['A1', 'A1#2'], 'duplicate check ids get a suffix');
+  assert.deepEqual(p.findings.map((f) => f.verdict).sort(), ['confirmed', 'false_alarm']);
+  assert.equal(p.data.stage, 'finalized');
+});
+
+await test('#16 an oversized payload is trimmed under the 2 MB limit instead of rejected', () => {
+  const { raw } = fakeFinal();
+  for (let i = 0; i < 800; i++) raw.reports[0].checks.push({ id: `BIG${i}`, name: 'big', priority: 'info', status: 'INFO', evidence: { blob: 'x'.repeat(3500) } });
+  const started = Date.now();
+  const p = buildPayload({ stage: 'detect-only', raw, root: SCRIPTS_DIR });
+  assert.ok(Buffer.byteLength(JSON.stringify(p)) < 2_000_000);
+  assert.ok(p.data.truncated);
+  assert.ok(Date.now() - started < 5000, 'scrubbing large evidence stays fast');
+  assert.equal(scrub({ s: 'y'.repeat(5_000_000) }).s.length < 5000, true, 'a 5 MB string is cut before any pattern runs');
+});
+
+await test('#16 runs are archived with run.json and only the newest N are kept', () => {
+  const out = mkdtempSync(path.join(TMP_ROOT, 'runs-'));
+  writeFileSync(path.join(out, 'preflight-report.md'), '# r');
+  for (let i = 0; i < 4; i++) archiveRun(out, { run_id: `0000000${i}-0000-4000-8000-000000000000`, mode: 'pre-merge', started_at: `2026-10-1${i}T00:00:00.000Z` }, { keepRuns: 3 });
+  const dirs = readdirSync(path.join(out, 'runs')).sort();
+  assert.equal(dirs.length, 3);
+  assert.ok(dirs[0].startsWith('2026-10-11'), 'oldest run pruned');
+  assert.ok(existsSync(path.join(out, 'runs', dirs[2], 'run.json')) && existsSync(path.join(out, 'runs', dirs[2], 'preflight-report.md')));
+});
+
+await test('#16 a failed send is queued, never thrown, and retried later', async () => {
+  const out = mkdtempSync(path.join(TMP_ROOT, 'send-'));
+  const settings = { ...telemetrySettings({}, { PREFLIGHT_SUPABASE_URL: 'http://127.0.0.1:9' }), keepRuns: 5 };
+  const result = await recordRun({ outDir: out, payload: { run_id: '22222222-2222-4222-8222-222222222222', mode: 'pre-merge', started_at: '2026-10-12T00:00:00.000Z' }, settings, log: () => {} });
+  assert.match(String(result.sent), /queued/);
+  assert.equal(readdirSync(path.join(out, 'pending')).length, 1);
+  const again = await flushPending(out, settings);
+  assert.deepEqual(again, { sent: 0, left: 1 }, 'still queued while offline');
+  const off = await recordRun({ outDir: out, payload: { run_id: '33333333-2222-4222-8222-222222222222', mode: 'baseline' }, settings: { ...settings, enabled: false }, log: () => {} });
+  assert.equal(off.sent, 'disabled');
+});
+
+await test('#16 telemetry can be turned off per machine or per project', () => {
+  assert.equal(telemetrySettings({}, {}).enabled, true);
+  assert.equal(telemetrySettings({}, { PREFLIGHT_TELEMETRY: '0' }).enabled, false);
+  assert.equal(telemetrySettings({ telemetry: { enabled: false } }, {}).enabled, false);
+  assert.equal(telemetrySettings({}, { PREFLIGHT_SUPABASE_URL: 'https://x.supabase.co/rest/v1/' }).url, 'https://x.supabase.co');
+});
+
+await test('#16 missing browser deps without --install report not-ok instead of throwing', () => {
+  const empty = mkdtempSync(path.join(TMP_ROOT, 'deps-'));
+  const r = ensureDeps({ install: false, env: { PREFLIGHT_DEPS_DIR: empty }, log: () => {} });
+  if (!existsSync(path.join(SCRIPTS_DIR, 'node_modules'))) assert.equal(r.ok, false);
+  assert.equal(nodePathWith('/a', '/b:/a'), ['/a', '/b'].join(path.delimiter));
+});
+
+await test('#16 analyze-runs reports false-alarm rate per check', () => {
+  const md = summarize([{ mode: 'pre-merge', overall: 'YELLOW', started_at: '2026-10-12', data: { stage: 'finalized' }, layers: [], checks: [], findings: [
+    { layer: 'code', check_id: 'S7', check_name: 'Standards', verdict: 'false_alarm' },
+    { layer: 'code', check_id: 'S7', check_name: 'Standards', verdict: 'confirmed' },
+  ] }]);
+  assert.match(md, /\| code\/S7 \| Standards \| 2 \| 1 \| 1 \| 50% \|/);
 });
 
 rmSync(TMP_ROOT, { recursive: true, force: true });

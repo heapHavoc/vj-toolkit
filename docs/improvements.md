@@ -167,7 +167,7 @@ Suggests `/figma-verify check-only` when the feature has a verify report and the
 - New prerequisites: `FIGMA_TOKEN`, and Playwright + Chromium.
 
 ## 5. Also added: `/preflight`
-A stage → main release gate, plus the `preflight-verifier` agent. It is separate from the Figma work and documented in [preflight.md](preflight.md).
+A stage → main release gate, plus the `preflight-verifier` agent. It is separate from the Figma work and documented in [preflight.md](preflight.md). Every run is archived locally and its scrubbed run log is collected in one Supabase project, so the checks can be calibrated from real runs (preflight.md §9).
 
 ## 6. Not in this change
 - **Learnings:** `/assess` writes `.claude/patterns-learned.md`, but no skill reads it back. The proposal is in [proposals/learnings.md](proposals/learnings.md).

@@ -85,6 +85,7 @@ These live in `.buildspace/preflight/` in the theme repo, never in the toolkit:
 - `preflight.config.json`: store, theme ids, pages, journeys, fixtures, thresholds, accepted. Created from `templates/preflight.config.example.json`.
 - `preflight-baseline.json`: written by `--mode baseline`.
 - generated: `preflight-raw.json`, `verification-worklist.json`, `verification/<layer>.json`, `preflight-final.json`, `preflight-report.md`, `artifacts/`
+- run history: `runs/<started>-<mode>-<id>/` (newest 20), plus `pending/` and `rejected/` for run logs that couldn't be sent (see §9)
 
 The storefront password is read only from `PREFLIGHT_STOREFRONT_PASSWORD` in the environment. It is never written to disk.
 
@@ -107,20 +108,52 @@ The storefront password is read only from `PREFLIGHT_STOREFRONT_PASSWORD` in the
 
 Requirements:
 - Node 18+
-- Playwright Chromium, used by both browser checkers
-- `lighthouse` and `chrome-launcher` (`scripts/package.json`), for performance diagnosis
+- Playwright Chromium, `lighthouse` and `chrome-launcher`: **installed automatically** on the first run into a shared per-user folder that survives plugin updates (1–3 min once). Without this, every member's browser checks would have been silently SKIPPED after the rollout, because the plugin ships without `node_modules`.
 - Shopify CLI, for theme check
 - `gh`, only for `--post-pr`
 
-## 9. Status and limits
+## 9. Run log: every run is kept and collected
+**Why:** before this, each run overwrote the last one on the developer's machine. There was no way to see which checks raise false alarms, which never fire, why checks get skipped, or what preflight missed, without asking people.
+
+**How:**
+- **Local history:** every finalized run, every baseline, and every run that was detected but never finalized is archived to `.buildspace/preflight/runs/` with a `run.json`. The newest 20 are kept.
+- **Shared log:** `run.json` is scrubbed and sent to one Supabase (Postgres) project, chosen with the TL. Sending is done by the scripts, never the model, so every run is recorded the same way.
+- **Feedback:** the report ends with one optional question, "Did preflight miss or misjudge anything?". The answer is recorded against the run with `record-feedback.mjs`.
+- **Never in the way:** a 5-second timeout; a failed send is queued and retried on the next run; nothing can change a verdict or exit code.
+
+**What's sent:** mode, verdicts per layer (before and after verification), durations, versions, who ran it, project, store domain, refs, every check's status, every finding with the verifier's verdict and reason, performance medians per page, config without secrets, and the feedback.
+
+**Never sent:** passwords, tokens, cookies, keys, shopper data (emails, ids, names, addresses), URL query strings other than theme pinning, home-folder paths, screenshots, full Lighthouse reports and code.
+
+**Security:** the plugin carries only the project's publishable key. It can call two insert functions and nothing else: it cannot read, change or delete data. This was tested against the live project.
+
+**Turning it off:** `PREFLIGHT_TELEMETRY=0`, or `"telemetry": { "enabled": false }` in a client's `preflight.config.json`. Local history is still kept.
+
+**Using the data:** views in Supabase answer the calibration questions directly:
+
+| View | Shows |
+|---|---|
+| `check_accuracy` | false-alarm % per check |
+| `check_activity` | checks that never fail or are always skipped |
+| `skip_reasons` | the most common reasons checks can't run |
+| `layer_health` | crashes and duration per checker |
+| `post_merge_findings` | what pre-merge missed |
+| `feedback` | what users said it got wrong |
+| `by_version` | whether a skill change improved results |
+
+`analyze-runs.mjs` gives the same summary from local runs. Details: `skills/preflight/telemetry/README.md`.
+
+## 10. Status and limits
 - All three checkers support all three modes.
 - Two layers are planned but not built: `check-runtime.mjs` (Liquid errors, missing translations, console and HTTP errors) and `check-features.mjs` (committed Playwright specs). The report's **Not checked** section says so.
 - **Expect a calibration period.** Analytics A6/A7 and the preview-bar exclusions were built against simulated stores, so confirm results by hand on the first real client runs.
 - Preflight is not in the published toolkit (3.5.0); it existed only in a local marketplace checkout. This change adds it to the plugin.
+- The Supabase project (`toolkit-analytics`) currently lives in a personal organization. Invite the TL as an owner; it can be transferred to the company organization later without changing the plugin (URL and keys stay the same).
 
-## 10. Summary
+## 11. Summary
 - Release-scoped gate for stage → main covering code, performance and analytics, reporting only what the release changes.
 - Detect → verify → finalize: scripts measure, verifier agents confirm, and a script computes the verdict.
 - Performance is a statistical A/B through Shopify's preview path. Lighthouse is diagnosis only.
 - Verdicts are per layer (RED / INCOMPLETE / YELLOW / GREEN), and sign-offs are recorded in config.
-- Treat the first real client runs as calibration.
+- Treat the first real client runs as calibration, and use the run log to do it: every run is archived and collected, scrubbed, in one Supabase project.
+- Dependencies install themselves on first run, so the rollout doesn't silently lose the browser checks.

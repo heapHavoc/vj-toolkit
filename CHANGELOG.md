@@ -15,6 +15,8 @@ Full write-up: [docs/improvements.md](docs/improvements.md). Preflight: [docs/pr
   - a `check-only` mode
   - shares `preview-url.txt` with `/compare`
 - **`/preflight`** + `preflight-verifier` agent: a release readiness gate for stage → main.
+- **Preflight run log**: every run (finalized, baseline, or never finalized) is archived to `.buildspace/preflight/runs/` and sent, scrubbed, to a shared Supabase project, with an optional "did preflight miss anything?" answer. Includes the schema and analysis views (`telemetry/supabase-setup.sql`), `record-feedback.mjs`, `analyze-runs.mjs`, a retry queue, and an off switch (`PREFLIGHT_TELEMETRY=0` or per project).
+- **Preflight dependencies install themselves**: Playwright, Lighthouse and Chromium are installed once into a per-user folder that survives plugin updates. Previously the plugin shipped without them and browser checks were SKIPPED.
 - **UserPromptSubmit hook**: routes Figma links to `/figma-rest`.
 
 ### Changed

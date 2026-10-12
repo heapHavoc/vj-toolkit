@@ -17,15 +17,22 @@ preflight/
     check-performance.mjs                checker 3: Lighthouse
     check-analytics.mjs                  checker 2: Playwright, GTM/GA4/Meta
     run-preflight.mjs                    DETECT stage: page selection, runs all three, writes raw + worklist
-    finalize-preflight.mjs               VERDICT stage: merges verifier output + config.accepted, writes the report
+    finalize-preflight.mjs               VERDICT stage: merges verifier output + config.accepted, writes the report, records the run
+    record-feedback.mjs                  attaches the user's "did preflight miss anything?" answer to the latest run
+    analyze-runs.mjs                     summarizes archived runs: false alarms, silent checks, skip reasons, durations
     lib/verdict.mjs                      status model, worklist explosion, verifier-merge rules
     lib/code-rules.mjs                   context-aware S4/S6/S7 rules (pure, tested)
     lib/page-map.mjs                     theme dependency graph → which pages the diff touches
     lib/abtest.mjs                       performance engine: preview-path A/B, real throttling, warm-up, identity proof, statistics
+    lib/deps.mjs                         one-time install of Playwright/Lighthouse/Chromium into a shared per-user folder
+    lib/telemetry.mjs                    run log: scrub, archive to runs/, send to Supabase, queue and retry
     __tests__/regression.test.mjs        plain-Node regression tests — run after any change
   templates/
     preflight-report-template.md         Markdown report skeleton
     preflight.config.example.json        starter config, copied per-project
+  telemetry/
+    supabase-setup.sql                   one-time schema, ingest functions and analysis views for the run log
+    README.md                            what is sent, what never is, how to read it, how to turn it off
 ```
 
 Per-project (not in this plugin — lives in the theme repo being checked):
@@ -40,7 +47,12 @@ Per-project (not in this plugin — lives in the theme repo being checked):
   preflight-final.json       generated — effective checks after verification
   preflight-report.md        generated — PENDING stub after detect, the real report after finalize
   artifacts/                 generated — analytics step screenshots, worst-run Lighthouse JSON
+  runs/<started>-<mode>-<id>/ generated — archived copy of every run + run.json (what was sent); newest 20 kept
+  pending/                   generated — run logs that failed to send, retried on the next run
+  rejected/                  generated — run logs the server refused, with its reason
 ```
+
+Keep `runs/`, `pending/` and `rejected/` out of git (they're under `.buildspace/`, which theme repos normally ignore).
 
 The verifier agent lives at `shopify-theme-toolkit/agents/preflight-verifier.md`.
 
@@ -324,6 +336,19 @@ these scripts, re-run an equivalent check before merging your change.
     - decides with Mann-Whitney U + a bootstrap 95% CI against a practical threshold, extending 10 → 20 runs per side while unsettled
 
     The same Store B comparison, repeated, gave the same verdicts. Lighthouse runs once per side, only on non-passing pages, for its insights. Don't reintroduce simulated timings into a verdict, and don't compare against the live URL directly.
+
+16. **Every run is kept, and keeping it can never break a run.** Before the run
+    log, each run overwrote the last, so there was no record of false alarms,
+    skips or crashes to calibrate from. Now finalize (and baseline, and the
+    next detect for a run that was never finalized) archives the run under
+    `runs/` and sends a scrubbed `run.json` to Supabase (`telemetry/README.md`).
+    The rules:
+    - recording is wrapped so no failure can change a verdict or exit code
+    - a failed send is queued in `pending/` and retried, a rejected one is kept in `rejected/`
+    - scrubbing removes secrets, shopper data, query strings and home paths before anything is written or sent
+    - strings are cut to 4,000 characters *before* any pattern runs: an
+      unbounded email regex took minutes on one 3 MB evidence string in testing
+    Tests `#16` cover scrubbing, payload shape, size trimming, archiving and pruning, queueing and the off switch.
 
 ## Extension points (brief §13 — do not build without being asked)
 

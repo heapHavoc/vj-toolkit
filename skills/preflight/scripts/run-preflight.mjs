@@ -14,6 +14,11 @@
  *   verification-worklist.json    one entry per verifiable finding (what the verifiers work on)
  *   preflight-report.md           a PENDING stub — replaced by finalize-preflight.mjs
  *   artifacts/                    screenshots (analytics) and worst-run Lighthouse reports (performance)
+ *   runs/<started>-<mode>-<id>/   archived copy of every past run (written by finalize; baseline here)
+ *
+ * Before the checkers run it installs Playwright/Lighthouse/Chromium once if missing
+ * (lib/deps.mjs) and saves any previous run that was detected but never finalized
+ * (lib/telemetry.mjs), so no run's data is lost.
  *
  * baseline mode is unchanged: it snapshots live and writes preflight-baseline.json, no verdict.
  *
@@ -22,6 +27,7 @@
  */
 
 import { execFile, execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +35,8 @@ import { promisify } from 'node:util';
 import { buildWorklist, layerStatus, overallStatus } from './lib/verdict.mjs';
 import { DEFAULT_IGNORED_TEMPLATES, pageUrls, readThemeAtRef, selectPages, templateTypeForPath } from './lib/page-map.mjs';
 import { previewPathUrl, probe } from './lib/abtest.mjs';
+import { ensureDeps, nodePathWith } from './lib/deps.mjs';
+import { buildPayload, flushPending, isArchived, recordRun, telemetrySettings } from './lib/telemetry.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -60,11 +68,12 @@ raw findings + a verification worklist. The verdict comes from finalize-prefligh
   --all-pages                              test every config.pages entry, not just those the diff touches
   --baseline-file <path>                   post-merge: baseline to diff against
   --post-pr                                recorded for finalize-preflight.mjs (posts the final report)
+  --no-install                             don't install missing Playwright/Lighthouse/Chromium
   -h, --help                               show this help
 `;
 
 const VALUE_FLAGS = new Set(['--mode', '--live-branch', '--staging-branch', '--root', '--config', '--live-url', '--preview-url', '--page-name', '--url', '--pages', '--baseline-file']);
-const BOOLEAN_FLAGS = new Set(['--post-pr', '--all-pages', '--help', '-h']);
+const BOOLEAN_FLAGS = new Set(['--post-pr', '--all-pages', '--no-install', '--help', '-h']);
 const MODES = new Set(['pre-merge', 'post-merge', 'baseline']);
 
 /** Strict parse. Returns { args } or { error } — never guesses past an unknown flag. */
@@ -100,6 +109,7 @@ export function parseArgs(argv) {
       config: values['--config'] || '.buildspace/preflight/preflight.config.json',
       postPr: bools.has('--post-pr'),
       allPages: bools.has('--all-pages'),
+      install: !bools.has('--no-install'),
       pagesFilter: values['--pages'] ? values['--pages'].split(',').map((s) => s.trim()).filter(Boolean) : null,
       liveUrls: multi['--live-url'],
       previewUrls: multi['--preview-url'],
@@ -409,7 +419,34 @@ export async function runChecker(script, args) {
 // running check-code.mjs itself concurrently against the same repo is NOT
 // (races on git's worktree metadata). Never add a second check-code entry.
 async function runAllCheckers(argsFor) {
-  return Promise.all(CHECKERS.map((c) => runChecker(c.script, argsFor(c.name))));
+  return Promise.all(
+    CHECKERS.map(async (c) => {
+      const started = Date.now();
+      const report = await runChecker(c.script, argsFor(c.name));
+      return { ...report, durationMs: Date.now() - started };
+    })
+  );
+}
+
+/** A previous run that was detected but never finalized is still a run: archive and send it before it's overwritten. */
+async function saveUnfinalizedRun(outDir, config, root) {
+  const raw = readJsonIfExists(path.join(outDir, 'preflight-raw.json'));
+  if (!raw?.runId || isArchived(outDir, raw.runId)) return;
+  const final = readJsonIfExists(path.join(outDir, 'preflight-final.json'));
+  if (final?.runId === raw.runId) return;
+  const worklist = readJsonIfExists(path.join(outDir, 'verification-worklist.json'));
+  const settings = telemetrySettings(config);
+  const payload = buildPayload({ stage: 'detect-only', raw, worklist, config, root, finishedAt: raw.generatedAt, deps: raw.deps || null });
+  console.error(`[run-preflight] saving previous run ${raw.runId.slice(0, 8)} (detected ${raw.generatedAt}, never finalized).`);
+  await recordRun({ outDir, payload, settings });
+}
+
+function readJsonIfExists(file) {
+  try {
+    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf-8')) : null;
+  } catch {
+    return null;
+  }
 }
 
 export { layerStatus, overallStatus, buildPerfPlan };
@@ -447,6 +484,26 @@ async function main() {
   const outDir = path.join(args.root, '.buildspace', 'preflight');
   const artifactsDir = path.join(outDir, 'artifacts');
   mkdirSync(outDir, { recursive: true });
+  const runId = randomUUID();
+  const startedAt = new Date().toISOString();
+
+  try {
+    await saveUnfinalizedRun(outDir, config, args.root);
+    const flushed = await flushPending(outDir, telemetrySettings(config));
+    if (flushed.sent) console.error(`[run-preflight] sent ${flushed.sent} queued run log(s).`);
+  } catch (err) {
+    console.error(`[run-preflight] could not save or send earlier run logs: ${err.message}`);
+  }
+
+  let deps;
+  try {
+    deps = ensureDeps({ install: args.install });
+  } catch (err) {
+    deps = { ok: false, installed: false, error: err.message };
+  }
+  if (deps.ok) process.env.NODE_PATH = nodePathWith(deps.nodeModules);
+  else console.error(`[run-preflight] browser dependencies unavailable (${deps.error}) — performance and analytics will SKIP.`);
+  const depsInfo = { ok: deps.ok, installed: deps.installed, error: deps.error || null };
 
   // Refs — resolved and printed up front so a wrong branch is visible before anything runs.
   try {
@@ -516,6 +573,12 @@ async function main() {
     writeFileSync(baselinePath, JSON.stringify(baseline, null, 2));
     const captured = Object.keys(baseline).filter((k) => !['generatedAt', 'liveBranch', 'liveSha'].includes(k));
     console.error(`Baseline written to ${baselinePath} — captured: ${captured.join(', ') || 'nothing (all checkers skipped)'}.`);
+    try {
+      const baseRaw = { runId, mode: 'baseline', startedAt, generatedAt: baseline.generatedAt, comparison, refs: { live, staging: null }, args: { liveBranch: args.liveBranch }, rawStatuses: reports.map((r) => ({ checker: r.checker, status: layerStatus(r) })), reports, deps: depsInfo };
+      await recordRun({ outDir, payload: buildPayload({ stage: 'baseline', raw: baseRaw, config, root: args.root, deps: depsInfo }), settings: telemetrySettings(config) });
+    } catch (err) {
+      console.error(`[run-preflight] could not record the baseline run: ${err.message}`);
+    }
     console.log(JSON.stringify({ mode: 'baseline', baselinePath, captured, reports }, null, 2));
     return;
   }
@@ -539,9 +602,12 @@ async function main() {
   const generatedAt = new Date().toISOString();
   const worklist = buildWorklist(reports, { accepted: config?.accepted || [], stagingRef: staging?.ref || null, liveRef: live?.ref || null });
   const raw = {
+    runId,
     mode: args.mode,
     stage: 'detect',
+    startedAt,
     generatedAt,
+    deps: depsInfo,
     comparison,
     refs: { live, staging },
     args: { liveBranch: args.liveBranch, stagingBranch: args.stagingBranch, postPr: args.postPr, config: args.config },
@@ -572,6 +638,7 @@ async function main() {
   console.log(
     JSON.stringify(
       {
+        runId,
         mode: args.mode,
         stage: 'detect',
         comparison,
