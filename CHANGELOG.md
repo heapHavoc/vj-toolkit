@@ -16,6 +16,13 @@ Full write-up: [docs/improvements.md](docs/improvements.md). Preflight: [docs/pr
   - shares `preview-url.txt` with `/compare`
 - **`/preflight`** + `preflight-verifier` agent: a release readiness gate for stage → main.
 - **Preflight run log**: every run (finalized, baseline, or never finalized) is archived to `.buildspace/preflight/runs/` and sent, scrubbed, to a shared Supabase project, with an optional "did preflight miss anything?" answer. Includes the schema and analysis views (`telemetry/supabase-setup.sql`), `record-feedback.mjs`, `analyze-runs.mjs`, a retry queue, and an off switch (`PREFLIGHT_TELEMETRY=0` or per project).
+- **Performance audit and documentation skills** (`/perf-scan`, `/perf-client-audit`, `/perf-apps-audit`, `/perf-report`), ported from personal skills and fixed: details in [docs/perf.md](docs/perf.md).
+  - One Node scan engine: median of 3 runs per device, one folder per site / theme / **page** (scans of different pages no longer overwrite each other's "latest"), API key from `PAGESPEED_API_KEY` or `.buildspace/.psi-key` and never printed, retries.
+  - Reads Lighthouse 12/13 insight audits with older ids as fallback, and says when a section isn't reported instead of showing an empty table. No Time to Interactive and no lab INP.
+  - The Core Web Vitals verdict comes from real-user field data (page, else origin), never from lab metrics; desktop gets desktop thresholds.
+  - Reports are written as .md and exported to .docx in the house document style (`md-to-docx.mjs`); names include site, page and date.
+  - Apps audit traces each script to theme code, an app embed, an app block or the platform, with a known-apps reference instead of client-specific lists.
+  - Regression tests: `skills/perf-scan/scripts/__tests__/perf.test.mjs`.
 - **Preflight dependencies install themselves**: Playwright, Lighthouse and Chromium are installed once into a per-user folder that survives plugin updates. Previously the plugin shipped without them and browser checks were SKIPPED.
 - **UserPromptSubmit hook**: routes Figma links to `/figma-rest`.
 

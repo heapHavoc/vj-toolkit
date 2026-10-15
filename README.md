@@ -46,6 +46,8 @@ Start with `/clickup` when work originates from a ClickUp task (it ingests the t
 
 Before a stage → main merge, run `/preflight`.
 
+For storefront performance documents, run `/perf-scan` on the pages, then `/perf-client-audit` (plain-English audit), `/perf-apps-audit` (which apps slow the site) or `/perf-report` (before / after an optimisation). Each writes a .md and a .docx.
+
 Run `/grill-me` between `/plan` and `/execute` when the plan looks thin or hides assumptions. It interviews you one decision at a time, dependencies first, and writes the resolved decisions back into the plan.
 
 ### Standalone Commands
@@ -57,6 +59,10 @@ Run `/grill-me` between `/plan` and `/execute` when the plan looks thin or hides
 /figma       — Extract design context from Figma (via the official MCP)
 /figma-verify — Measure the build against Figma, test interactions, sweep breakpoints, auto-fix
 /preflight   — Release readiness gate: diff staging vs live (code, performance, analytics)
+/perf-scan          — PageSpeed Insights scan (mobile + desktop, median of 3) saved per page
+/perf-client-audit  — Plain-English performance audit for a client (.md + .docx)
+/perf-apps-audit    — Third-party app impact audit, traced to theme code / app embeds (.md + .docx)
+/perf-report        — Before / after optimisation report from scans + the git diff (.md + .docx)
 /grill-me    : Interrogate a plan, PRD, or spec branch by branch until shared understanding
 /fix         — Bug fixing with first-principles Root Cause Analysis
 /assess      — First-principles verification against requirements and standards
@@ -81,6 +87,8 @@ Run `/grill-me` between `/plan` and `/execute` when the plan looks thin or hides
 | Visual Comparison | `/compare` | after /execute when Figma screenshots exist |
 | Figma Verification | `/figma-verify` | after /execute when built with /figma-rest; `check-only` after /fix |
 | Release Gate | `/preflight` | before / right after a stage → main merge, or to snapshot a baseline |
+| Performance audit for a client | `/perf-scan` | /perf-scan → /perf-client-audit → /perf-apps-audit |
+| Performance before / after | `/perf-report` | scans of both versions + the git diff between their branches |
 | Research | `/research` | standalone web search |
 | Understand Code | `/understand` | standalone deep trace |
 
@@ -101,6 +109,10 @@ Run `/grill-me` between `/plan` and `/execute` when the plan looks thin or hides
 | `/compare` | Visual comparison of code vs Figma screenshots | `selectors.json` + Figma screenshots | `comparison-report.md` |
 | `/figma-verify` | Measured Figma match at the frame widths, 11-width sweep, interaction tests, one gate then auto-fix loop | `sections.json` + `figma-dumps/` + `selectors.json` + dev server | `verify-report.md` + `verify/round-N/` + `fix-log.md` |
 | `/preflight` | Release readiness gate (stage → main), reports only what the release changes | preview + live theme | `.buildspace/preflight/` report, run history in `runs/`, run log sent to Supabase |
+| `/perf-scan` | PageSpeed Insights, mobile + desktop, median of 3 runs; field data and Core Web Vitals verdict first | page URL(s) | `.buildspace/artifacts/perf/scans/<site>/<theme>/<page>/<time>/` (`scan.md`, `summary.json`, raw JSON) |
+| `/perf-client-audit` | Plain-English audit for a non-technical client | a scan (runs one if missing) | `.buildspace/artifacts/perf/reports/<site>/client-audit-<page>-<date>.md` + `.docx` |
+| `/perf-apps-audit` | Which apps slow the page, how each is loaded (theme code / app embed / app block / platform), priority and actions | a scan + theme code | `…/apps-audit-<page>-<date>.md` + `.docx` |
+| `/perf-report` | Before / after optimisation report; only changes that are in the git diff | two scans + two branches | `…/performance-report-<page>-<date>.md` + `.docx` |
 | `/assess` | First-principles verification (requirements + standards + integration) | `execution-log.md` + `clarify.md` | `assessment-report.md` |
 | `/fix` | First-principles RCA + fix all instances (waits for approval) | `assessment-report.md` or bug report | `fix-log.md` |
 | `/understand` | Deep code explanation | file/section/feature name | conversation output |

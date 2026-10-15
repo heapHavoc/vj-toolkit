@@ -1,0 +1,8 @@
+{
+  "name": "perf-scan",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "docx": "^9.5.0"
+  }
+}
